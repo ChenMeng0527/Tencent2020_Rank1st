@@ -1,3 +1,8 @@
+#coding=utf-8
+'''
+特征提取---注释
+'''
+
 import os
 import random
 import json
@@ -10,7 +15,15 @@ from gensim.models import Word2Vec
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 
-def get_agg_features(dfs,f1,f2,agg,log):    
+
+def get_agg_features(dfs,f1,f2,agg,log):
+    '''
+    df
+    字段1：
+    字段2：
+    agg计算方式
+    log:数据
+    '''
     #判定特殊情况
     if type(f1)==str:
         f1=[f1]
@@ -55,9 +68,13 @@ def get_agg_features(dfs,f1,f2,agg,log):
 
 
 def sequence_text(dfs,f1,f2,log):
+    '''
+
+    '''
     f_name='sequence_text_'+f1+'_'+f2
     print(f_name)
-    #遍历log，获得用户的点击序列
+
+    # 遍历log，获得用户的点击序列
     dic,items={},[]
     for item in log[[f1,f2]].values:
         try:
@@ -66,7 +83,8 @@ def sequence_text(dfs,f1,f2,log):
             dic[item[0]]=[str(item[1])]      
     for key in dic:
         items.append([key,' '.join(dic[key])])
-    #赋值序列特征
+
+    # 赋值序列特征
     temp=pd.DataFrame(items)
     temp.columns=[f1,f_name]
     temp = temp.drop_duplicates(f1)
@@ -82,6 +100,8 @@ def sequence_text(dfs,f1,f2,log):
     del items
     del dic
     return [f_name]
+
+
 
 def kfold(train_df,test_df,log_data,pivot):
     #先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
@@ -159,25 +179,40 @@ if __name__ == "__main__":
     train_df=pd.read_pickle('data/train_user.pkl')
     test_df=pd.read_pickle('data/test_user.pkl')
     print(click_log.shape,train_df.shape,test_df.shape)
+
+
     ################################################################################
-    #获取聚合特征
+    # 获取聚合特征
+    # 注意：将train / test合并算了，也就是最后一天每个用户
     print("Extracting aggregate feature...")
     agg_features=[]
+    # 1：每个用户总条数
     agg_features+=get_agg_features([train_df,test_df],'user_id','','size',click_log)
+    # 2：每个用户ad_id不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','ad_id','unique',click_log)
+    # 3：每个用户creative_id不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','creative_id','unique',click_log)
+    # 4：每个用户advertiser_id不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','advertiser_id','unique',click_log)
+    # 5：每个用户industry不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','industry','unique',click_log)
+    # 6：每个用户product_id不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','product_id','unique',click_log)
+    # 7：每个用户time不同数
     agg_features+=get_agg_features([train_df,test_df],'user_id','time','unique',click_log)
+    # 8：每个用户click_times总数
     agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','sum',click_log)
+    # 9：每个用户click_times平均数
     agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','mean',click_log)
+    # 10：每个用户click_times方差
     agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','std',click_log)
     train_df[agg_features]=train_df[agg_features].fillna(-1)
     test_df[agg_features]=test_df[agg_features].fillna(-1)
     print("Extracting aggregate feature done!")
     print("List aggregate feature names:")
     print(agg_features)
+
+
     ################################################################################
     #获取序列特征，用户点击的id序列
     print("Extracting sequence feature...")
