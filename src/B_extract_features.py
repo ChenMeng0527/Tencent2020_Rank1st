@@ -16,77 +16,82 @@ from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 
 
-def get_agg_features(dfs,f1,f2,agg,log):
+def get_agg_features(dfs, f1, f2, agg, log):
     '''
-    df
-    字段1：
-    字段2：
-    agg计算方式
-    log:数据
+        df
+        字段1：
+        字段2：
+        agg计算方式
+        log:数据
     '''
-    #判定特殊情况
-    if type(f1)==str:
-        f1=[f1]
-    if agg!='size':
-        data=log[f1+[f2]]
+    # 判定特殊情况
+    if type(f1) == str:
+        f1 = [f1]
+    if agg != 'size':
+        # 把需要聚合的两列拿出来
+        data = log[f1+[f2]]
     else:
-        data=log[f1] 
-    f_name='_'.join(f1)+"_"+f2+"_"+agg     
-    #聚合操作    
-    if agg=="size":
+        # size的话只需要一列就行
+        data = log[f1]
+    f_name = '_'.join(f1) + "_" + f2 + "_" + agg
+
+    # 聚合操作
+    if agg == "size":
         tmp = pd.DataFrame(data.groupby(f1).size()).reset_index()
-    elif agg=="count":
+    elif agg == "count":
         tmp = pd.DataFrame(data.groupby(f1)[f2].count()).reset_index()
-    elif agg=="mean":
+    elif agg == "mean":
         tmp = pd.DataFrame(data.groupby(f1)[f2].mean()).reset_index()
-    elif agg=="unique":
+    elif agg == "unique":
         tmp = pd.DataFrame(data.groupby(f1)[f2].nunique()).reset_index()
-    elif agg=="max":
+    elif agg == "max":
         tmp = pd.DataFrame(data.groupby(f1)[f2].max()).reset_index()
-    elif agg=="min":
+    elif agg == "min":
         tmp = pd.DataFrame(data.groupby(f1)[f2].min()).reset_index()
-    elif agg=="sum":
+    elif agg == "sum":
         tmp = pd.DataFrame(data.groupby(f1)[f2].sum()).reset_index()
-    elif agg=="std":
+    elif agg == "std":
         tmp = pd.DataFrame(data.groupby(f1)[f2].std()).reset_index()
-    elif agg=="median":
+    elif agg == "median":
         tmp = pd.DataFrame(data.groupby(f1)[f2].median()).reset_index()
     else:
-        raise "agg error"   
-    #赋值聚合特征
+        raise Exception("agg error")
+
+    # 赋值聚合特征
     for df in dfs:
         try:
             del df[f_name]
         except:
             pass
         tmp.columns = f1+[f_name]
-        df[f_name]=df.merge(tmp, on=f1, how='left')[f_name] 
+        df[f_name] = df.merge(tmp, on=f1, how='left')[f_name]
     del tmp
     del data
     gc.collect()
     return [f_name]
 
 
-def sequence_text(dfs,f1,f2,log):
+def sequence_text(dfs, f1, f2, log):
     '''
-
+    根据两个字段，生成序列特征，比如user_id下的ad_id序列
     '''
-    f_name='sequence_text_'+f1+'_'+f2
+    f_name = 'sequence_text_'+f1+'_'+f2
     print(f_name)
 
-    # 遍历log，获得用户的点击序列
-    dic,items={},[]
-    for item in log[[f1,f2]].values:
+    # --------遍历log，获得用户的点击序列--------
+    dic, items = {}, []
+    for item in log[[f1, f2]].values:
         try:
             dic[item[0]].append(str(item[1]))
         except:
-            dic[item[0]]=[str(item[1])]      
+            dic[item[0]] = [str(item[1])]
     for key in dic:
-        items.append([key,' '.join(dic[key])])
+        items.append([key, ' '.join(dic[key])])
+
 
     # 赋值序列特征
-    temp=pd.DataFrame(items)
-    temp.columns=[f1,f_name]
+    temp = pd.DataFrame(items)
+    temp.columns = [f1, f_name]
     temp = temp.drop_duplicates(f1)
     for df in dfs:
         try:
@@ -94,7 +99,7 @@ def sequence_text(dfs,f1,f2,log):
         except:
             pass
         temp.columns = [f1]+[f_name]
-        df[f_name]=df.merge(temp, on=f1, how='left')[f_name]
+        df[f_name] = df.merge(temp, on=f1, how='left')[f_name]
     gc.collect() 
     del temp
     del items
@@ -103,14 +108,20 @@ def sequence_text(dfs,f1,f2,log):
 
 
 
-def kfold(train_df,test_df,log_data,pivot):
-    #先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
-    kfold_features=['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
-    log=log_data[kfold_features+['user_id',pivot,'fold']]
-    tmps=[]
-    for fold in range(6):
+def kfold(train_df, test_df, log_data, pivot):
+    '''
+
+    '''
+    # 先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
+    kfold_features = ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i in range(2)]
+    # 将不同年龄，性别的用户数据包括 'pivot'，'fold'字段数据拿出来
+    log = log_data[kfold_features+['user_id', pivot, 'fold']]
+    tmps = []
+    for fold in range(6): # 012345
+        # 求出大部分舍1后的fold的平均值，比如性别1的平均值，年龄的平均值
         tmp = pd.DataFrame(log[(log['fold'] != fold) & (log['fold'] != 5)].groupby(pivot)[kfold_features].mean()).reset_index()
         tmp.columns=[pivot]+kfold_features
+        # 舍1后的特征，当作其余一个fold的特征
         tmp['fold']=fold
         tmps.append(tmp)
     tmp=pd.concat(tmps,axis=0).reset_index()
@@ -118,7 +129,7 @@ def kfold(train_df,test_df,log_data,pivot):
     del log
     del tmps
     gc.collect() 
-    #获得用户点击的所有记录的平均性别年龄分布
+    # 获得用户点击的所有记录的平均性别年龄分布
     tmp_mean = pd.DataFrame(tmp.groupby('user_id')[kfold_features].mean()).reset_index()
     tmp_mean.columns=['user_id']+[f+'_'+pivot+'_mean' for f in kfold_features]
     for df in [train_df,test_df]:
@@ -134,7 +145,10 @@ def kfold(train_df,test_df,log_data,pivot):
 
 
 
-def kfold_sequence(train_df,test_df,log_data,pivot): 
+def kfold_sequence(train_df,test_df,log_data,pivot):
+    '''
+
+    '''
     #先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
     kfold_features=['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
     log=log_data[kfold_features+[pivot,'fold','user_id']]
@@ -174,78 +188,92 @@ def kfold_sequence(train_df,test_df,log_data,pivot):
     return kfold_sequence_features
 
 if __name__ == "__main__":
-    #读取数据
-    click_log=pd.read_pickle('data/click.pkl')
-    train_df=pd.read_pickle('data/train_user.pkl')
-    test_df=pd.read_pickle('data/test_user.pkl')
-    print(click_log.shape,train_df.shape,test_df.shape)
+    # 读取数据
+    click_log = pd.read_pickle('data/click.pkl')
+    train_df = pd.read_pickle('data/train_user.pkl')
+    test_df = pd.read_pickle('data/test_user.pkl')
+    print(click_log.shape, train_df.shape, test_df.shape)
 
 
     ################################################################################
-    # 获取聚合特征
+    # ---------------1：获取聚合特征---------------
     # 注意：将train / test合并算了，也就是最后一天每个用户
     print("Extracting aggregate feature...")
-    agg_features=[]
+    agg_features = []
     # 1：每个用户总条数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','','size',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', '', 'size', click_log)
     # 2：每个用户ad_id不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','ad_id','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'ad_id', 'unique', click_log)
     # 3：每个用户creative_id不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','creative_id','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'creative_id', 'unique', click_log)
     # 4：每个用户advertiser_id不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','advertiser_id','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'advertiser_id', 'unique', click_log)
     # 5：每个用户industry不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','industry','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'industry', 'unique', click_log)
     # 6：每个用户product_id不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','product_id','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'product_id', 'unique', click_log)
     # 7：每个用户time不同数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','time','unique',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'time', 'unique', click_log)
+
     # 8：每个用户click_times总数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','sum',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'click_times', 'sum', click_log)
     # 9：每个用户click_times平均数
-    agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','mean',click_log)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'click_times', 'mean', click_log)
     # 10：每个用户click_times方差
-    agg_features+=get_agg_features([train_df,test_df],'user_id','click_times','std',click_log)
-    train_df[agg_features]=train_df[agg_features].fillna(-1)
-    test_df[agg_features]=test_df[agg_features].fillna(-1)
+    agg_features += get_agg_features([train_df, test_df], 'user_id', 'click_times', 'std', click_log)
+
+    train_df[agg_features] = train_df[agg_features].fillna(-1)
+    test_df[agg_features] = test_df[agg_features].fillna(-1)
     print("Extracting aggregate feature done!")
     print("List aggregate feature names:")
     print(agg_features)
 
 
     ################################################################################
-    #获取序列特征，用户点击的id序列
+    #---------------2：获取序列特征，用户点击的id序列---------------
     print("Extracting sequence feature...")
-    text_features=[]
-    text_features+=sequence_text([train_df,test_df],'user_id','ad_id',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','creative_id',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','advertiser_id',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','product_id',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','industry',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','product_category',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','time',click_log)
-    text_features+=sequence_text([train_df,test_df],'user_id','click_times',click_log)
+    text_features = []
+    # 1：ad_id序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'ad_id', click_log)
+    # 2：creative_id序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'creative_id', click_log)
+    # 3：advertiser_id序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'advertiser_id', click_log)
+    # 4：product_id序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'product_id', click_log)
+    # 5：industry序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'industry', click_log)
+    # 6：product_category序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'product_category', click_log)
+    # 7: time序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'time', click_log)
+    # 8：click_times序列
+    text_features += sequence_text([train_df, test_df], 'user_id', 'click_times', click_log)
     print("Extracting sequence feature done!")
     print("List sequence feature names:")   
     print(text_features)
+
+
     ################################################################################
-    #获取K折统计特征，求出用户点击的所有记录的年龄性别平均分布
-    #赋值index,训练集为0-4，测试集为5
+    #-------------3：获取K折统计特征，求出用户点击的所有记录的年龄性别平均分布---------
+    # 赋值index,训练集为0-4，测试集为5
     print("Extracting Kflod feature...")
-    log=click_log.drop_duplicates(['user_id','creative_id']).reset_index(drop=True)
+    log = click_log.drop_duplicates(['user_id', 'creative_id']).reset_index(drop=True)
     del click_log
     gc.collect()
-    log['cont']=1
-    train_df['fold']=train_df.index%5
-    test_df['fold']=5
-    df=train_df.append(test_df)[['user_id','fold']].reset_index(drop=True)
-    log=log.merge(df,on='user_id',how='left')
+    log['cont'] = 1
+    # 将数据分为5分，加上fold特征
+    train_df['fold'] = train_df.index % 5
+    # 测试为第5分
+    test_df['fold'] = 5
+    df = train_df.append(test_df)[['user_id', 'fold']].reset_index(drop=True)
+    log = log.merge(df, on='user_id', how='left')
     del df
     gc.collect()
-    #获取用户点击某特征的年龄性别平均分布
-    for pivot in ['creative_id','ad_id','product_id','advertiser_id','industry']:
-        print("Kfold",pivot)
-        kfold(train_df,test_df,log,pivot)
+    # 获取用户点击某特征的年龄性别平均分布
+    for pivot in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
+        print("Kfold", pivot)
+        kfold(train_df, test_df, log, pivot)
     del log
     gc.collect()       
     print("Extracting Kflod feature done!")

@@ -28,19 +28,20 @@ def set_seed(args):
 class ctrNet(nn.Module):
     def __init__(self,args):
         super(ctrNet, self).__init__()
-        #设置GPU和创建模型
+        # 设置GPU和创建模型
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         args.n_gpu = torch.cuda.device_count()
         args.device = device
         logger.info(" device: %s, n_gpu: %s",device, args.n_gpu)
-        model=Model(args)  
+        model = Model(args)
         model.to(args.device)   
-        self.model=model
-        self.args=args
+        self.model = model
+        self.args = args
         set_seed(args)
-        
-    def train(self,train_dataset,dev_dataset=None):
-        args=self.args
+
+
+    def train(self, train_dataset, dev_dataset=None):
+        args = self.args
         #设置dataloader
         train_sampler = RandomSampler(train_dataset)
         train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size,num_workers=4)

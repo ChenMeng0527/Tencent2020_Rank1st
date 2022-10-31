@@ -1,8 +1,9 @@
 # coding=utf-8
 '''
-代码注释
+代码注释，将训练测试数据进行合并，最大数据集
 @20221028
 '''
+
 import pandas as pd
 import numpy as np
 
@@ -36,13 +37,14 @@ def merge_files():
     train_user=train_user.append(pd.read_csv("data/train_semi_final/user.csv"))
     train_user=train_user.reset_index(drop=True)
     train_user['age']=train_user['age']-1
-    train_user['gender']=train_user['gender']-1
+    train_user['gender'] = train_user['gender']-1
+
     test_user=pd.read_csv("data/test/click_log.csv").drop_duplicates('user_id')[['user_id']].reset_index(drop=True)
     test_user=test_user.sort_values(by='user_id').reset_index(drop=True)
     test_user['age']=-1
     test_user['gender']=-1
 
-    #合并点击，广告，用户信息
+    # 合并点击，广告，用户信息
     print("merge all files...")
     click_df=click_df.merge(ad_df,on="creative_id",how='left')
     click_df=click_df.merge(train_user,on="user_id",how='left')
@@ -61,7 +63,7 @@ def merge_files():
 
 if __name__ == "__main__":
     click_df,train_user,test_user=merge_files() 
-    #保存预处理文件
+    # 保存预处理文件
     print("preprocess done! saving data...")
     click_df.to_pickle("data/click.pkl")
     train_user.to_pickle("data/train_user.pkl")

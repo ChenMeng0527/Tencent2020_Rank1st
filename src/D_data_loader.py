@@ -1,8 +1,9 @@
 # coding=utf-8
 
 '''
-
+pytporch数据处理---注释
 '''
+
 import logging
 import torch
 import pandas as pd
@@ -18,8 +19,11 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 class TextDataset(Dataset):
     def __init__(self, args,df):
         self.label=df['label'].values
+        #
         self.text_features=df[[x[1] for x in args.text_features]].values
+        #
         self.text_features_1=df[[x[1] for x in args.text_features_1]].values
+        #
         self.dense_features=df[args.dense_features].values
         self.embeddings_tables=[]
         for x in args.text_features:
@@ -36,7 +40,7 @@ class TextDataset(Dataset):
     def __getitem__(self, i):  
         #标签信息
         label=self.label[i]
-        #BERT的输入特征
+        # BERT的输入特征
         if len(self.args.text_features)==0:
             text_features=0
             text_masks=0
@@ -56,7 +60,7 @@ class TextDataset(Dataset):
                     except:
                         text_ids[w_idx,idx]=self.args.vocab['unk']
                 begin_dim=end_dim
-        #decoder的输入特征        
+        # decoder的输入特征
         if len(self.args.text_features_1)==0:
             text_features_1=0
             text_masks_1=0
@@ -75,6 +79,7 @@ class TextDataset(Dataset):
                         text_features_1[w_idx,begin_dim:end_dim]=v
                         text_masks_1[w_idx]=1                    
                 begin_dim=end_dim
+
         #浮点数特征                 
         if len(self.args.dense_features)==0:
             dense_features=0

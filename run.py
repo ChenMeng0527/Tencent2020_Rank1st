@@ -15,31 +15,46 @@ from torch.utils.data import DataLoader, SequentialSampler, RandomSampler,Tensor
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 from sklearn.model_selection import StratifiedKFold
 base_path="data"
-#定义浮点数特征
-dense_features=['user_id__size', 'user_id_ad_id_unique', 'user_id_creative_id_unique', 'user_id_advertiser_id_unique', 'user_id_industry_unique', 'user_id_product_id_unique', 'user_id_time_unique', 'user_id_click_times_sum', 'user_id_click_times_mean', 'user_id_click_times_std']
+
+
+
+# ------定义浮点数特征
+# 统计特征
+dense_features=['user_id__size',
+                'user_id_ad_id_unique',
+                'user_id_creative_id_unique',
+                'user_id_advertiser_id_unique',
+                'user_id_industry_unique',
+                'user_id_product_id_unique',
+                'user_id_time_unique',
+                'user_id_click_times_sum',
+                'user_id_click_times_mean',
+                'user_id_click_times_std']
+# kfold特征
 for l in ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]:
     for f in ['creative_id','ad_id','product_id','advertiser_id','industry']:  
         dense_features.append(l+'_'+f+'_mean')
 
-#定义用户点击的序列特征
+
+# 定义用户点击的序列特征
 text_features=[
-[base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128],
-[base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128],
-[base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128],
-[base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128],
-[base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128],
-[base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128],
-[base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128],
-[base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128], 
-]
+                [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128],
+                [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128],
+                [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128],
+                [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128],
+                [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128],
+                [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128],
+                [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128],
+                [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128],
+                ]
 #定义用户点击的人工构造序列特征
 text_features_1=[       
-[base_path+"/sequence_text_user_id_creative_id_fold.12d",'sequence_text_user_id_creative_id_fold',12],
-[base_path+"/sequence_text_user_id_ad_id_fold.12d",'sequence_text_user_id_ad_id_fold',12],
-[base_path+"/sequence_text_user_id_product_id_fold.12d",'sequence_text_user_id_product_id_fold',12],
-[base_path+"/sequence_text_user_id_advertiser_id_fold.12d",'sequence_text_user_id_advertiser_id_fold',12],
-[base_path+"/sequence_text_user_id_industry_fold.12d",'sequence_text_user_id_industry_fold',12],    
-]
+                [base_path+"/sequence_text_user_id_creative_id_fold.12d",'sequence_text_user_id_creative_id_fold',12],
+                [base_path+"/sequence_text_user_id_ad_id_fold.12d",'sequence_text_user_id_ad_id_fold',12],
+                [base_path+"/sequence_text_user_id_product_id_fold.12d",'sequence_text_user_id_product_id_fold',12],
+                [base_path+"/sequence_text_user_id_advertiser_id_fold.12d",'sequence_text_user_id_advertiser_id_fold',12],
+                [base_path+"/sequence_text_user_id_industry_fold.12d",'sequence_text_user_id_industry_fold',12],
+                ]
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
@@ -81,13 +96,16 @@ if __name__ == "__main__":
     args.text_dim=sum([x[-1] for x in text_features])
     args.text_dim_1=sum([x[-1] for x in text_features_1])
     args.output_dir="saved_models/index_{}".format(args.index)
-    
-    #读取word2vector模型
+
+
+    #-------------------读取word2vector模型-------------------
     args.embeddings_tables={}
     for x in args.text_features:
         if x[0] not in args.embeddings_tables:
             try:
-                args.embeddings_tables[x[0]]=gensim.models.KeyedVectors.load_word2vec_format(x[0],binary=False)  
+                # gensim读取
+                args.embeddings_tables[x[0]]=gensim.models.KeyedVectors.load_word2vec_format(x[0], binary=False)
+                # pickle读取
             except:
                 args.embeddings_tables[x[0]]=pickle.load(open(x[0],'rb'))
 
@@ -98,9 +116,11 @@ if __name__ == "__main__":
                 args.embeddings_tables_1[x[0]]=gensim.models.KeyedVectors.load_word2vec_format(x[0],binary=False)  
             except:
                 args.embeddings_tables_1[x[0]]=pickle.load(open(x[0],'rb'))
-    
-    #读取数据       
+
+
+    #-------------------统计特征进行归一化-------------------
     train_df=pd.read_pickle('data/train_user.pkl')
+    # label = age*2+gender
     train_df['label']=train_df['age']*2+train_df['gender']
     test_df=pd.read_pickle('data/test_user.pkl')
     test_df['label']=test_df['age']*2+test_df['gender']
@@ -112,8 +132,8 @@ if __name__ == "__main__":
     test_dataset = TextDataset(args,test_df)    
     
     #建立模型
-    skf=StratifiedKFold(n_splits=5,random_state=2020,shuffle=True)
-    model=ctrNet.ctrNet(args)
+    skf = StratifiedKFold(n_splits=5,random_state=2020,shuffle=True)
+    model = ctrNet.ctrNet(args)
     
     #训练模型
     for i,(train_index,test_index) in enumerate(skf.split(train_df,train_df['label'])):
@@ -121,9 +141,9 @@ if __name__ == "__main__":
             continue
         logger.info("Index: %s",args.index)
         train_dataset = TextDataset(args,train_df.iloc[train_index])
-        dev_dataset=TextDataset(args,train_df.iloc[test_index])
-        model.train(train_dataset,dev_dataset)
-        dev_df=train_df.iloc[test_index]
+        dev_dataset = TextDataset(args,train_df.iloc[test_index])
+        model.train(train_dataset, dev_dataset)
+        dev_df = train_df.iloc[test_index]
     
     #输出结果
     accs=[]
