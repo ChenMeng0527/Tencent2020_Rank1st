@@ -44,12 +44,13 @@ def merge_files():
     test_user['age']=-1
     test_user['gender']=-1
 
-    # 合并点击，广告，用户信息
+
+    # 合并点击，广告，用户信息,并添加label-onehot列
     print("merge all files...")
-    click_df=click_df.merge(ad_df,on="creative_id",how='left')
-    click_df=click_df.merge(train_user,on="user_id",how='left')
+    click_df=click_df.merge(ad_df, on="creative_id", how='left')
+    click_df=click_df.merge(train_user, on="user_id", how='left')
     click_df=click_df.fillna(-1)
-    click_df=click_df.replace("\\N",-1)
+    click_df=click_df.replace("\\N", -1)
     for f in click_df:
         click_df[f]=click_df[f].astype(int)
     for i in range(10):

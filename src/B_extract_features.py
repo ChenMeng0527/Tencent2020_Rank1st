@@ -110,82 +110,91 @@ def sequence_text(dfs, f1, f2, log):
 
 def kfold(train_df, test_df, log_data, pivot):
     '''
-
+    train_df: 每个用户一条数据
+    log_data: 用户行为数据
+    pivot: id字段
     '''
-    # 先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
+    # 先对log做kflod统计, 统计每条记录中pivot特征的性别年龄分布
     kfold_features = ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i in range(2)]
     # 将不同年龄，性别的用户数据包括 'pivot'，'fold'字段数据拿出来
-    log = log_data[kfold_features+['user_id', pivot, 'fold']]
+    log = log_data[kfold_features + ['user_id', pivot, 'fold']]
     tmps = []
+
+    # 将01234 交叉求出每个label target的平均数，拼接起来
     for fold in range(6): # 012345
         # 求出大部分舍1后的fold的平均值，比如性别1的平均值，年龄的平均值
         tmp = pd.DataFrame(log[(log['fold'] != fold) & (log['fold'] != 5)].groupby(pivot)[kfold_features].mean()).reset_index()
-        tmp.columns=[pivot]+kfold_features
+        tmp.columns = [pivot]+kfold_features
         # 舍1后的特征，当作其余一个fold的特征
-        tmp['fold']=fold
+        tmp['fold'] = fold
         tmps.append(tmp)
-    tmp=pd.concat(tmps,axis=0).reset_index()
-    tmp=log[['user_id',pivot,'fold']].merge(tmp,on=[pivot,'fold'],how='left')
+    tmp = pd.concat(tmps, axis=0).reset_index()
+    tmp = log[['user_id', pivot, 'fold']].merge(tmp, on=[pivot, 'fold'], how='left')
     del log
     del tmps
-    gc.collect() 
-    # 获得用户点击的所有记录的平均性别年龄分布
+    gc.collect()
+
+    # 获得用户点击的所有记录的平均性别年龄分布 ？？？？？？？
     tmp_mean = pd.DataFrame(tmp.groupby('user_id')[kfold_features].mean()).reset_index()
-    tmp_mean.columns=['user_id']+[f+'_'+pivot+'_mean' for f in kfold_features]
-    for df in [train_df,test_df]:
-        temp=df.merge(tmp_mean,on='user_id',how='left')
-        temp=temp.fillna(-1)
+    tmp_mean.columns = ['user_id'] + [f+'_'+pivot+'_mean' for f in kfold_features]
+    for df in [train_df, test_df]:
+        temp = df.merge(tmp_mean, on='user_id', how='left')
+        temp = temp.fillna(-1)
         for f1 in [f+'_'+pivot+'_mean' for f in kfold_features]:
-            df[f1]=temp[f1]
+            df[f1] = temp[f1]
         del temp
         gc.collect()
+
     del tmp
     del tmp_mean
     gc.collect()
 
 
 
-def kfold_sequence(train_df,test_df,log_data,pivot):
+def kfold_sequence(train_df, test_df, log_data, pivot):
     '''
 
     '''
-    #先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
-    kfold_features=['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
-    log=log_data[kfold_features+[pivot,'fold','user_id']]
-    tmps=[]
+    # 先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
+    kfold_features = ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
+    log = log_data[kfold_features + [pivot, 'fold', 'user_id']]
+    tmps = []
     for fold in range(6):
         tmp = pd.DataFrame(log[(log['fold'] != fold) & (log['fold'] != 5)].groupby(pivot)[kfold_features].mean()).reset_index()
-        tmp.columns=[pivot]+kfold_features
-        tmp['fold']=fold
+        tmp.columns = [pivot] + kfold_features
+        tmp['fold'] = fold
         tmps.append(tmp)
-    tmp=pd.concat(tmps,axis=0).reset_index()
-    tmp=log[[pivot,'fold','user_id']].merge(tmp,on=[pivot,'fold'],how='left')
-    tmp=tmp.fillna(-1)   
-    tmp[pivot+'_fold']=tmp[pivot]*10+tmp['fold']   
+    tmp = pd.concat(tmps, axis=0).reset_index()
+    tmp = log[[pivot, 'fold', 'user_id']].merge(tmp, on=[pivot, 'fold'], how='left')
+    tmp = tmp.fillna(-1)
+    tmp[pivot+'_fold'] = tmp[pivot]*10+tmp['fold']
     del log
     del tmps
     gc.collect() 
-    #获得用户点击记录的年龄性别分布序列
-    tmp[pivot+'_fold']=tmp[pivot+'_fold'].astype(int)
-    kfold_sequence_features=sequence_text([train_df,test_df],'user_id',pivot+'_fold',tmp)
-    tmp=tmp.drop_duplicates([pivot+'_fold']).reset_index(drop=True)
-    #对每条记录年龄性别分布进行标准化
-    kfold_features=['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
-    ss=StandardScaler()
+    # 获得用户点击记录的年龄性别分布序列
+    tmp[pivot+'_fold'] = tmp[pivot+'_fold'].astype(int)
+    kfold_sequence_features = sequence_text([train_df, test_df], 'user_id', pivot+'_fold', tmp)
+    tmp = tmp.drop_duplicates([pivot+'_fold']).reset_index(drop=True)
+
+    # 对每条记录年龄性别分布进行标准化
+    kfold_features = ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
+    ss = StandardScaler()
     ss.fit(tmp[kfold_features])
-    tmp[kfold_features]=ss.transform(tmp[kfold_features])
+    tmp[kfold_features] = ss.transform(tmp[kfold_features])
     for f in kfold_features:
-        tmp[f]=tmp[f].apply(lambda x:round(x,4))   
-    #将每条记录年龄性别分布转成w2v形式的文件
+        tmp[f] = tmp[f].apply(lambda x: round(x,4))
+
+    # 将每条记录年龄性别分布转成w2v形式的文件
     with open('data/sequence_text_user_id_'+pivot+'_fold'+".{}d".format(12),'w') as f:
         f.write(str(len(tmp))+' '+'12'+'\n')
-        for item in tmp[[pivot+'_fold']+kfold_features].values:
+        for item in tmp[[pivot+'_fold'] + kfold_features].values:
             f.write(' '.join([str(int(item[0]))]+[str(x) for x in item[1:]])+'\n') 
-    tmp=gensim.models.KeyedVectors.load_word2vec_format('data/sequence_text_user_id_'+pivot+'_fold'+".{}d".format(12),binary=False)
-    pickle.dump(tmp,open('data/sequence_text_user_id_'+pivot+'_fold'+".{}d".format(12),'wb'))
+    tmp = gensim.models.KeyedVectors.load_word2vec_format('data/sequence_text_user_id_'+pivot+'_fold'+".{}d".format(12), binary=False)
+    pickle.dump(tmp, open('data/sequence_text_user_id_'+pivot+'_fold'+".{}d".format(12), 'wb'))
     del tmp
     gc.collect()  
     return kfold_sequence_features
+
 
 if __name__ == "__main__":
     # 读取数据
@@ -255,7 +264,7 @@ if __name__ == "__main__":
 
 
     ################################################################################
-    #-------------3：获取K折统计特征，求出用户点击的所有记录的年龄性别平均分布---------
+    #-------------3:获取K折统计特征，求出用户点击的所有记录的年龄性别平均分布---------
     # 赋值index,训练集为0-4，测试集为5
     print("Extracting Kflod feature...")
     log = click_log.drop_duplicates(['user_id', 'creative_id']).reset_index(drop=True)
@@ -277,30 +286,34 @@ if __name__ == "__main__":
     del log
     gc.collect()       
     print("Extracting Kflod feature done!")
+
+
     ################################################################################
-    #获取K折序列特征,求出用户点击的每一条记录的年龄性别分布
-    #赋值index,训练集为0-4，测试集为5
+    #-------------4:获取K折序列特征,求出用户点击的每一条记录的年龄性别分布
+    # 赋值index,训练集为0-4，测试集为5
     print("Extracting Kflod sequence feature...")
-    click_log=pd.read_pickle('data/click.pkl')
-    log=click_log.reset_index(drop=True)
+    click_log = pd.read_pickle('data/click.pkl')
+    log = click_log.reset_index(drop=True)
     del click_log
     gc.collect()
-    log['cont']=1
-    train_df['fold']=train_df.index%5
-    train_df['fold']=train_df['fold'].astype(int)
-    test_df['fold']=5
-    df=train_df.append(test_df)[['user_id','fold']].reset_index(drop=True)
-    log=log.merge(df,on='user_id',how='left')
-    #获取用户点击某特征的年龄性别分布序列
-    kfold_sequence_features=[] 
-    for pivot in ['creative_id','ad_id','product_id','advertiser_id','industry']:
-        print("Kfold sequence",pivot)
-        kfold_sequence_features+=kfold_sequence(train_df,test_df,log,pivot) 
+    log['cont'] = 1
+    train_df['fold'] = train_df.index % 5
+    train_df['fold'] = train_df['fold'].astype(int)
+    test_df['fold'] = 5
+    df = train_df.append(test_df)[['user_id', 'fold']].reset_index(drop=True)
+    log = log.merge(df, on='user_id', how='left')
+
+    # 获取用户点击某特征的年龄性别分布序列
+    kfold_sequence_features = []
+    for pivot in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
+        print("Kfold sequence", pivot)
+        kfold_sequence_features += kfold_sequence(train_df, test_df, log, pivot)
     del log
     gc.collect()        
     print("Extracting Kfold sequence feature done!")
     print("List Kfold sequence feature names:")   
-    print(kfold_sequence_features)  
+    print(kfold_sequence_features)
+
     ################################################################################
     print("Extract features done! saving data...")
     train_df.to_pickle('data/train_user.pkl')

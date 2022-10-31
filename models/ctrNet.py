@@ -71,11 +71,14 @@ class ctrNet(nn.Module):
         tr_loss, best_age_acc,best_gender_acc,avg_loss,tr_nb = 0.0,0.0, 0.0,0.0,0.0
         model.zero_grad()  
         patience=0
+
+
         for idx in range(args.num_train_epochs):     
             tr_num=0
             train_loss=0
+
             for step, batch in enumerate(train_dataloader):
-                #forward和backward
+                # orward和backward
                 labels,dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1=(x.to(args.device) for x in batch)  
                 del batch
                 model.train()
@@ -87,13 +90,15 @@ class ctrNet(nn.Module):
                 tr_loss += loss.item()
                 tr_num+=1
                 train_loss+=loss.item()
-                #输出log
+
+                # 输出log
                 if avg_loss==0:
                     avg_loss=tr_loss
                 avg_loss=round(train_loss/tr_num,5)
                 if (step+1) % args.display_steps == 0:
                     logger.info("  epoch {} step {} loss {}".format(idx,step+1,avg_loss))
-                #update梯度
+
+                # update梯度
                 optimizer.step()
                 optimizer.zero_grad()
                 scheduler.step()  
@@ -104,8 +109,8 @@ class ctrNet(nn.Module):
                     #输出验证集性别和年龄的概率
                     age_probs,gender_probs = self.infer(dev_dataset)
                     #输出性别和年龄的loss和acc
-                    age_results= self.eval(dev_dataset.df['age'].values,age_probs)
-                    gender_results= self.eval(dev_dataset.df['gender'].values,gender_probs)
+                    age_results = self.eval(dev_dataset.df['age'].values, age_probs)
+                    gender_results = self.eval(dev_dataset.df['gender'].values, gender_probs)
                     results={}
                     results['eval_age_loss']=age_results['eval_loss']
                     results['eval_gender_loss']=gender_results['eval_loss']
@@ -142,10 +147,10 @@ class ctrNet(nn.Module):
                         torch.save(model_to_save.state_dict(), output_model_file)
                     logger.info("  best_acc = %s",round(best_age_acc+best_gender_acc,4)) 
                         
-            #一个epoch结束后，测试验证集结果            
+            # 一个epoch结束后，测试验证集结果
             if dev_dataset is not None:
                 #输出验证集性别和年龄的概率
-                age_probs,gender_probs = self.infer(dev_dataset)
+                age_probs, gender_probs = self.infer(dev_dataset)
                 #输出性别和年龄的loss和acc
                 age_results= self.eval(dev_dataset.df['age'].values,age_probs)
                 gender_results= self.eval(dev_dataset.df['gender'].values,gender_probs)
@@ -156,10 +161,12 @@ class ctrNet(nn.Module):
                 results['eval_gender_acc']=gender_results['eval_acc']  
                 #打印结果                    
                 for key, value in results.items():
-                    logger.info("  %s = %s", key, round(value,4))                    
-                #保存最好的年龄结果和模型
-                if results['eval_age_acc']>best_age_acc:
-                    best_age_acc=results['eval_age_acc']
+                    logger.info("  %s = %s", key, round(value,4))
+
+
+                # ----------保存最好的年龄结果和模型----------
+                if results['eval_age_acc'] > best_age_acc:
+                    best_age_acc = results['eval_age_acc']
                     logger.info("  "+"*"*20)  
                     logger.info("  Best age acc:%s",round(best_age_acc,4))
                     logger.info("  "+"*"*20)                          
@@ -168,11 +175,14 @@ class ctrNet(nn.Module):
                     except:
                         pass
                     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                    # 保存最好的模型
                     output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('age'))
                     torch.save(model_to_save.state_dict(), output_model_file)
-                #保存最好的性别结果和模型
-                if results['eval_gender_acc']>best_gender_acc:
-                    best_gender_acc=results['eval_gender_acc']
+
+
+                # ----------保存最好的性别结果和模型----------
+                if results['eval_gender_acc'] > best_gender_acc:
+                    best_gender_acc = results['eval_gender_acc']
                     logger.info("  "+"*"*20)  
                     logger.info("  Best gender acc:%s",round(best_gender_acc,4))
                     logger.info("  "+"*"*20)                          
@@ -183,10 +193,11 @@ class ctrNet(nn.Module):
                     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                     output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('gender'))
                     torch.save(model_to_save.state_dict(), output_model_file)
-                logger.info("  best_acc = %s",round(best_age_acc+best_gender_acc,4)) 
+                logger.info("best_acc = %s", round(best_age_acc+best_gender_acc, 4))
 
 
-    def infer(self,eval_dataset):
+
+    def infer(self, eval_dataset):
         #预测年龄和性别的概率分布
         args=self.args
         model=self.model        
@@ -204,23 +215,31 @@ class ctrNet(nn.Module):
             age_probs.append(probs_1.cpu().numpy()) 
             gender_probs.append(probs_2.cpu().numpy()) 
 
-        age_probs=np.concatenate(age_probs,0)
-        gender_probs=np.concatenate(gender_probs,0)
-        return age_probs,gender_probs
-    
-    def eval(self,labels,preds):
-        #求出loss和acc
-        results={}
-        results['eval_acc']=np.mean(labels==np.argmax(preds,-1))
+        age_probs = np.concatenate(age_probs,0)
+        gender_probs = np.concatenate(gender_probs,0)
+        return age_probs, gender_probs
+
+
+
+    def eval(self, labels, preds):
+        '''
+
+        '''
+        # 求出loss和acc
+        results = {}
+        results['eval_acc'] = np.mean(labels == np.argmax(preds, -1))
         from sklearn.metrics import log_loss
-        results['eval_loss']=log_loss(labels,preds)         
+        results['eval_loss'] = log_loss(labels, preds)
         return results
-    
-    def reload(self,label):
-        #读取在验证集结果最好的模型
-        model=self.model
-        args=self.args
-        args.load_model_path=os.path.join(args.output_dir, "pytorch_model_{}.bin".format(label))
+
+
+    def reload(self, label):
+        '''
+        读取在验证集结果最好的模型
+        '''
+        model = self.model
+        args = self.args
+        args.load_model_path = os.path.join(args.output_dir, "pytorch_model_{}.bin".format(label))
         logger.info("Load model from %s",args.load_model_path)
         model_to_load = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         model_to_load.load_state_dict(torch.load(args.load_model_path))        

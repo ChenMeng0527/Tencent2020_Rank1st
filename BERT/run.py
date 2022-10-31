@@ -65,11 +65,11 @@ class TextDataset(Dataset):
         return len(self.text_features[0])
 
     def __getitem__(self, i):  
-        text_features=np.zeros((self.args.block_size,self.args.text_dim))
-        text_ids=np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)
-        text_masks=np.zeros(self.args.block_size) 
-        text_label=np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)-100
-        begin_dim=0
+        text_features = np.zeros((self.args.block_size, self.args.text_dim))
+        text_ids = np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)
+        text_masks = np.zeros(self.args.block_size)
+        text_label = np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)-100
+        begin_dim = 0
         #选择20%的token进行掩码，其中80%设为[mask], 10%设为[UNK],10%随机选择
         for idx,x in enumerate(self.args.text_features):
             end_dim=begin_dim+x[2]
@@ -106,7 +106,9 @@ class TextDataset(Dataset):
                     text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
             begin_dim=end_dim 
         return  torch.tensor(text_features),torch.tensor(text_ids),torch.tensor(text_masks),torch.tensor(text_label)
-    
+
+
+
 def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -114,7 +116,8 @@ def set_seed(args):
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
-def train(args, train_dataset,dev_dataset, model):
+
+def train(args, train_dataset, dev_dataset, model):
     #设置dataloader
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset)
@@ -298,6 +301,7 @@ def evaluate(args,  model, eval_dataset):
         
         
 def main():
+    # -------------------参数-------------------
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -308,22 +312,15 @@ def main():
     parser.add_argument("--eval_data_file", default=None, type=str,
                         help="An optional input evaluation data file to evaluate the perplexity on (a text file).")
 
-    parser.add_argument("--model_type", default="bert", type=str,
-                        help="The model architecture to be fine-tuned.")
-    parser.add_argument("--model_name_or_path", default=None, type=str,
-                        help="The model checkpoint for weights initialization.")
+    parser.add_argument("--model_type", default="bert", type=str, help="The model architecture to be fine-tuned.")
+    parser.add_argument("--model_name_or_path", default=None, type=str, help="The model checkpoint for weights initialization.")
 
-    parser.add_argument("--mlm", action='store_true',
-                        help="Train with masked-language modeling loss instead of language modeling.")
-    parser.add_argument("--mlm_probability", type=float, default=0.15,
-                        help="Ratio of tokens to mask for masked language modeling loss")
+    parser.add_argument("--mlm", action='store_true', help="Train with masked-language modeling loss instead of language modeling.")
+    parser.add_argument("--mlm_probability", type=float, default=0.15, help="Ratio of tokens to mask for masked language modeling loss")
 
-    parser.add_argument("--config_name", default="", type=str,
-                        help="Optional pretrained config name or path if not the same as model_name_or_path")
-    parser.add_argument("--tokenizer_name", default="", type=str,
-                        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path")
-    parser.add_argument("--cache_dir", default="", type=str,
-                        help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)")
+    parser.add_argument("--config_name", default="", type=str, help="Optional pretrained config name or path if not the same as model_name_or_path")
+    parser.add_argument("--tokenizer_name", default="", type=str, help="Optional pretrained tokenizer name or path if not the same as model_name_or_path")
+    parser.add_argument("--cache_dir", default="", type=str, help="Optional directory to store the pre-trained models downloaded from s3 (instread of the default one)")
     parser.add_argument("--block_size", default=-1, type=int,
                         help="Optional input sequence length after tokenization."
                              "The training dataset will be truncated in block of this size for training."
@@ -332,40 +329,24 @@ def main():
                         help="Optional input sequence length after tokenization."
                              "The training dataset will be truncated in block of this size for training."
                              "Default to the model max input length for single sentence inputs (take into account special tokens).")    
-    parser.add_argument("--do_train", action='store_true',
-                        help="Whether to run training.")
-    parser.add_argument("--do_eval", action='store_true',
-                        help="Whether to run eval on the dev set.")
-    parser.add_argument("--evaluate_during_training", action='store_true',
-                        help="Run evaluation during training at each logging step.")
-    parser.add_argument("--do_lower_case", action='store_true',
-                        help="Set this flag if you are using an uncased model.")
+    parser.add_argument("--do_train", action='store_true', help="Whether to run training.")
+    parser.add_argument("--do_eval", action='store_true', help="Whether to run eval on the dev set.")
+    parser.add_argument("--evaluate_during_training", action='store_true', help="Run evaluation during training at each logging step.")
+    parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
 
-    parser.add_argument("--per_gpu_train_batch_size", default=4, type=int,
-                        help="Batch size per GPU/CPU for training.")
-    parser.add_argument("--per_gpu_eval_batch_size", default=4, type=int,
-                        help="Batch size per GPU/CPU for evaluation.")
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
-                        help="Number of updates steps to accumulate before performing a backward/update pass.")
-    parser.add_argument("--learning_rate", default=5e-5, type=float,
-                        help="The initial learning rate for Adam.")
-    parser.add_argument("--weight_decay", default=0.0, type=float,
-                        help="Weight deay if we apply some.")
-    parser.add_argument("--adam_epsilon", default=1e-8, type=float,
-                        help="Epsilon for Adam optimizer.")
-    parser.add_argument("--max_grad_norm", default=1.0, type=float,
-                        help="Max gradient norm.")
-    parser.add_argument("--num_train_epochs", default=1.0, type=float,
-                        help="Total number of training epochs to perform.")
-    parser.add_argument("--max_steps", default=-1, type=int,
-                        help="If > 0: set total number of training steps to perform. Override num_train_epochs.")
-    parser.add_argument("--warmup_steps", default=0, type=int,
-                        help="Linear warmup over warmup_steps.")
+    parser.add_argument("--per_gpu_train_batch_size", default=4, type=int, help="Batch size per GPU/CPU for training.")
+    parser.add_argument("--per_gpu_eval_batch_size", default=4, type=int, help="Batch size per GPU/CPU for evaluation.")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight deay if we apply some.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
+    parser.add_argument("--num_train_epochs", default=1.0, type=float, help="Total number of training epochs to perform.")
+    parser.add_argument("--max_steps", default=-1, type=int, help="If > 0: set total number of training steps to perform. Override num_train_epochs.")
+    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
 
-    parser.add_argument('--logging_steps', type=int, default=50,
-                        help="Log every X updates steps.")
-    parser.add_argument('--save_steps', type=int, default=50,
-                        help="Save checkpoint every X updates steps.")
+    parser.add_argument('--logging_steps', type=int, default=50, help="Log every X updates steps.")
+    parser.add_argument('--save_steps', type=int, default=50, help="Save checkpoint every X updates steps.")
     parser.add_argument('--save_total_limit', type=int, default=None,
                         help='Limit the total amount of checkpoints, delete the older checkpoints in the output_dir, does not delete by default')
     parser.add_argument("--eval_all_checkpoints", action='store_true',
@@ -430,25 +411,25 @@ def main():
 
     base_path="../data"
     text_features=[      
-    [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
-    [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
-    [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
-    [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128,True],
-    [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128,True],
-    [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128,True],
-    [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128,True],
-    [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
-    ]
+                    [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
+                    [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
+                    [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
+                    [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128,True],
+                    [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128,True],
+                    [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128,True],
+                    [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128,True],
+                    [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
+                    ]
 
     #读取训练数据
-    train_df=pd.read_pickle(os.path.join(base_path,'train_user.pkl'))
-    test_df=pd.read_pickle(os.path.join(base_path,'test_user.pkl'))
-    dev_data=train_df.iloc[-10000:]
-    train_data=train_df.iloc[:-10000].append(test_df)  
+    train_df = pd.read_pickle(os.path.join(base_path,'train_user.pkl'))
+    test_df = pd.read_pickle(os.path.join(base_path,'test_user.pkl'))
+    dev_data = train_df.iloc[-10000:]
+    train_data = train_df.iloc[:-10000].append(test_df)
     
     #创建输入端的词表，每个域最多保留10w个id
     try:
-        dic=pickle.load(open(os.path.join(args.output_dir, 'vocab.pkl'),'rb'))
+        dic = pickle.load(open(os.path.join(args.output_dir, 'vocab.pkl'),'rb'))
     except:
         dic={}
         dic['pad']=0
@@ -481,6 +462,7 @@ def main():
                                             config=config,
                                             cache_dir=args.cache_dir if args.cache_dir else None)   
         args.text_dim=config.hidden_size
+
     else:
         config = RobertaConfig()        
         config.num_hidden_layers=12
@@ -495,17 +477,18 @@ def main():
     logger.info("Training/evaluation parameters %s", args)
 
     #保存输入端词表
-    args.vocab_dic=dic
-    pickle.dump(dic,open(os.path.join(args.output_dir, 'vocab.pkl'),'wb'))
+    args.vocab_dic = dic
+    pickle.dump(dic, open(os.path.join(args.output_dir, 'vocab.pkl'),'wb'))
+
 
     #读取word embedding
     import gensim
-    embedding_table=[]
+    embedding_table = []
     for x in text_features:
         print(x)
         embedding_table.append(pickle.load(open(x[0],'rb')))
 
-    #创建输出端词表，每个域最多保留10w个id
+    # 创建输出端词表，每个域最多保留10w个id
     vocab=[]
     for feature in text_features:
         conter=Counter()
@@ -521,24 +504,24 @@ def main():
             dic[x[0]]=idx+1    
         vocab.append(dic)
      
-    #设置参数  
-    args.vocab_size_v1=config.vocab_size_v1
-    args.vocab_dim_v1=config.vocab_dim_v1
-    args.vocab=vocab
-    args.text_dim=sum([x[2] for x in text_features])
-    args.text_features=text_features
-    train_dataset=TextDataset(args,train_data,embedding_table)
-    dev_dataset=TextDataset(args,dev_data,embedding_table)
-    args.vocab_size=[len(x)+1 for x in vocab]
-    #创建模型
-    model=Model(model,config,args)   
-    #如果有checkpoint，读取checkpoint
+    # 设置参数
+    args.vocab_size_v1 = config.vocab_size_v1
+    args.vocab_dim_v1 = config.vocab_dim_v1
+    args.vocab = vocab
+    args.text_dim = sum([x[2] for x in text_features])
+    args.text_features = text_features
+    train_dataset = TextDataset(args,train_data,embedding_table)
+    dev_dataset = TextDataset(args,dev_data,embedding_table)
+    args.vocab_size = [len(x)+1 for x in vocab]
+    # 创建模型
+    model = Model(model,config,args)
+    # 如果有checkpoint，读取checkpoint
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
-        logger.info("Load model from %s",os.path.join(checkpoint_last, "model.bin"))
+        logger.info("Load model from %s", os.path.join(checkpoint_last, "model.bin"))
         model.load_state_dict(torch.load(os.path.join(checkpoint_last, "model.bin"))) 
 
-    #训练      
-    train(args, train_dataset,dev_dataset, model)
+    # 训练
+    train(args, train_dataset, dev_dataset, model)
 
 
 if __name__ == "__main__":
