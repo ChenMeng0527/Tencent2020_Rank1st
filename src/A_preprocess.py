@@ -6,6 +6,9 @@
 
 import pandas as pd
 import numpy as np
+import sys
+sys.path.append('/Users/youshu_/Python_Workspace/Tencent2020_Rank1st')
+
 
 def merge_files():
     '''
@@ -14,9 +17,10 @@ def merge_files():
 
     # -----点击数据合并------
     print("merge click files...")
+
     click_df=pd.read_csv("data/train_preliminary/click_log.csv")
     # 可以去掉减少数据
-    click_df=click_df.append(pd.read_csv("data/train_semi_final/click_log.csv"))
+    # click_df=click_df.append(pd.read_csv("data/train_semi_final/click_log.csv"))
     click_df=click_df.append(pd.read_csv("data/test/click_log.csv"))
     click_df=click_df.sort_values(by=["time"]).drop_duplicates()
 
@@ -25,7 +29,7 @@ def merge_files():
     print("merge ad files...")
     ad_df=pd.read_csv("data/train_preliminary/ad.csv")
     # 可以去掉减少数据
-    ad_df=ad_df.append(pd.read_csv("data/train_semi_final/ad.csv"))
+    # ad_df=ad_df.append(pd.read_csv("data/train_semi_final/ad.csv"))
     ad_df=ad_df.append(pd.read_csv("data/test/ad.csv"))
     ad_df=ad_df.drop_duplicates() 
     
@@ -34,11 +38,12 @@ def merge_files():
     print("merge user files...")
     train_user=pd.read_csv("data/train_preliminary/user.csv")
     # 可以去掉减少数据
-    train_user=train_user.append(pd.read_csv("data/train_semi_final/user.csv"))
+    # train_user=train_user.append(pd.read_csv("data/train_semi_final/user.csv"))
     train_user=train_user.reset_index(drop=True)
     train_user['age']=train_user['age']-1
     train_user['gender'] = train_user['gender']-1
 
+    # 将测试点击数据的用户去重复，user_id取出来，label都设置为-1
     test_user=pd.read_csv("data/test/click_log.csv").drop_duplicates('user_id')[['user_id']].reset_index(drop=True)
     test_user=test_user.sort_values(by='user_id').reset_index(drop=True)
     test_user['age']=-1
@@ -63,6 +68,24 @@ def merge_files():
 
 
 if __name__ == "__main__":
+    # click_df：
+    #           time  user_id  creative_id  ...  age_9  gender_0  gender_1
+    # 0            1  3915646        22854  ...      0         0         0
+    # 1            1  3920282        22182  ...      0         0         0
+    #
+    # train_user：
+    #         user_id  age  gender
+    # 0             1    3       0
+    # 1             2    9       0
+    # 2             3    6       1
+    # 3             4    4       0
+    #
+    # test_user：
+    #         user_id  age  gender
+    # 0       3000001   -1      -1
+    # 1       3000002   -1      -1
+    # 2       3000003   -1      -1
+
     click_df,train_user,test_user=merge_files() 
     # 保存预处理文件
     print("preprocess done! saving data...")

@@ -45,71 +45,106 @@ from tqdm import tqdm, trange
 import multiprocessing
 from model import Model
 cpu_cont = 4
-from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup,
-                          RobertaConfig, RobertaModel, RobertaTokenizer)
+from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup, RobertaConfig, RobertaModel, RobertaTokenizer)
 
 logger = logging.getLogger(__name__)
 
-MODEL_CLASSES = {
-    'roberta': (RobertaConfig, RobertaModel, RobertaTokenizer),
-}
+MODEL_CLASSES = {'roberta': (RobertaConfig, RobertaModel, RobertaTokenizer),}
+
 
 class TextDataset(Dataset):
-    def __init__(self, args,df,embedding_table):
-        self.text_features=[df[x[1]].values for x in args.text_features]
-        self.embedding_table=embedding_table
-        self.args=args
-        self.vocab=[list(x) for x in args.vocab]
+    def __init__(self, args, df, embedding_table):
+        # x[1] = sequence_text_user_id_product_id
+        self.text_features = [df[x[1]].values for x in args.text_features]
+        self.embedding_table = embedding_table
+        self.args = args
+        self.vocab = [list(x) for x in args.vocab]
+
 
     def __len__(self):
         return len(self.text_features[0])
 
-    def __getitem__(self, i):  
+
+    def __getitem__(self, i):
+
+        # ！！！注意8个id序列一起填写
+        # 输入的4个变量
+        # 1：text_features : [block_size,text_dim]  [S,8*128]
         text_features = np.zeros((self.args.block_size, self.args.text_dim))
-        text_ids = np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)
+        # 2: text_ids : [block_size,len(self.args.text_features)]  [S,8]
+        text_ids = np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)
+        # 3: text_masks : [block_size] [S]
         text_masks = np.zeros(self.args.block_size)
-        text_label = np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)-100
+        # 4: text_label : [block_size,len(self.args.text_features)]  [S,8]
+        text_label = np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)-100
+
         begin_dim = 0
-        #选择20%的token进行掩码，其中80%设为[mask], 10%设为[UNK],10%随机选择
-        for idx,x in enumerate(self.args.text_features):
-            end_dim=begin_dim+x[2]
-            for word_idx,word in enumerate(self.text_features[idx][i].split()[:self.args.block_size]):
-                text_masks[word_idx]=1
-                if random.random()<self.args.mlm_probability:
+        # 选择20%的token进行掩码，其中80%设为[mask], 10%设为[UNK],10%随机选择
+        # 遍历8个行为
+        for idx, x in enumerate(self.args.text_features):
+            end_dim = begin_dim + x[2]
+            # 获取对应的行为id的所有序列数据，并获取第i个用户的，并拿出max_len的个数
+            # [87,87,1033,-1,87,87]
+            for word_idx, word in enumerate(self.text_features[idx][i].split()[:self.args.block_size]):
+                text_masks[word_idx] = 1
+
+                # 20%进行掩码
+                if random.random() < self.args.mlm_probability:
+                    # 如果id在vocab中，label = 1 ？？？
                     if word in self.args.vocab[idx]:
-                        text_label[word_idx,idx]=self.args.vocab[idx][word]
+                        text_label[word_idx, idx] = self.args.vocab[idx][word]
+                    # 如果id不在vocab中，label = 0
                     else:
-                        text_label[word_idx,idx]=0
-                    if random.random()<0.8:
-                        text_ids[word_idx,idx]=self.args.vocab_dic['mask']
-                    elif random.random()<0.5:
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
+                        text_label[word_idx, idx] = 0
+
+                    # 80%设为[mask]
+                    if random.random() < 0.8:
+                        text_ids[word_idx, idx] = self.args.vocab_dic['mask']
+
+                    # 10%设为[unk]
+                    elif random.random() < 0.5:
+                        text_features[word_idx, begin_dim:end_dim] = self.embedding_table[idx][word]
                         try:
-                            text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],word)]
+                            text_ids[word_idx, idx] = self.args.vocab_dic[(x[1], word)]
                         except:
-                            text_ids[word_idx,idx]=self.args.vocab_dic['unk']
+                            text_ids[word_idx, idx] = self.args.vocab_dic['unk']
+
+                    # 10%设为随机
                     else:
                         while True:
-                            random_word=random.sample(self.vocab[idx],1)[0]
-                            if random_word!=word:
+                            random_word = random.sample(self.vocab[idx], 1)[0]
+                            if random_word != word:
                                 break
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][random_word] 
+                        text_features[word_idx, begin_dim:end_dim] = self.embedding_table[idx][random_word]
                         try:
-                            text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],random_word)]
+                            text_ids[word_idx, idx] = self.args.vocab_dic[(x[1], random_word)]
                         except:
-                            text_ids[word_idx,idx]=self.args.vocab_dic['unk']
+                            text_ids[word_idx, idx] = self.args.vocab_dic['unk']
+
+                # 80%不进行掩码
                 else:
                     try:
-                        text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],word)]
+                        # id在的话，这一列对应的值为 id索引
+                        text_ids[word_idx, idx] = self.args.vocab_dic[(x[1], word)]
                     except:
-                        text_ids[word_idx,idx]=self.args.vocab_dic['unk']
-                    text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
-            begin_dim=end_dim 
-        return  torch.tensor(text_features),torch.tensor(text_ids),torch.tensor(text_masks),torch.tensor(text_label)
+                        # id不在的话，这一列对应的值为 unk索引
+                        text_ids[word_idx, idx] = self.args.vocab_dic['unk']
+                    #  embedding填写
+                    text_features[word_idx, begin_dim:end_dim] = self.embedding_table[idx][word]
+
+            begin_dim = end_dim
+
+        return  torch.tensor(text_features),\
+                torch.tensor(text_ids),\
+                torch.tensor(text_masks),\
+                torch.tensor(text_label)
 
 
 
 def set_seed(args):
+    '''
+    random / numpy / tourch.cud 进行随机种子
+    '''
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -118,10 +153,13 @@ def set_seed(args):
 
 
 def train(args, train_dataset, dev_dataset, model):
+    '''
+
+    '''
     #设置dataloader
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size,num_workers=4)
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4)
     t_total = args.max_steps
     args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
 
@@ -176,7 +214,9 @@ def train(args, train_dataset, dev_dataset, model):
     tr_loss, logging_loss,avg_loss,tr_nb = 0.0, 0.0,0.0,0
     model.zero_grad()
     set_seed(args)
- 
+
+
+
     for idx in range(args.start_epoch, int(args.num_train_epochs)): 
         for step, batch in enumerate(train_dataloader):
             inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]   
@@ -205,16 +245,16 @@ def train(args, train_dataset, dev_dataset, model):
                 optimizer.zero_grad()
                 scheduler.step()  
                 global_step += 1
-                output_flag=True
-                avg_loss=round(np.exp((tr_loss - logging_loss) /(global_step- tr_nb)),4)
-                if global_step %100 == 0:
-                    logger.info("  steps: %s  ppl: %s", global_step, round(avg_loss,5))
+                output_flag = True
+                avg_loss = round(np.exp((tr_loss - logging_loss) /(global_step- tr_nb)), 4)
+                if global_step % 100 == 0:
+                    logger.info("  steps: %s  ppl: %s", global_step, round(avg_loss, 5))
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     logging_loss = tr_loss
                     tr_nb=global_step
 
-                #验证
+                # 验证
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = 'checkpoint'
                     if args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
@@ -301,7 +341,8 @@ def evaluate(args,  model, eval_dataset):
         
         
 def main():
-    # -------------------参数-------------------
+
+    # -----------------------参数-----------------------
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -347,26 +388,18 @@ def main():
 
     parser.add_argument('--logging_steps', type=int, default=50, help="Log every X updates steps.")
     parser.add_argument('--save_steps', type=int, default=50, help="Save checkpoint every X updates steps.")
-    parser.add_argument('--save_total_limit', type=int, default=None,
-                        help='Limit the total amount of checkpoints, delete the older checkpoints in the output_dir, does not delete by default')
-    parser.add_argument("--eval_all_checkpoints", action='store_true',
-                        help="Evaluate all checkpoints starting with the same prefix as model_name_or_path ending and ending with step number")
-    parser.add_argument("--no_cuda", action='store_true',
-                        help="Avoid using CUDA when available")
-    parser.add_argument('--overwrite_output_dir', action='store_true',
-                        help="Overwrite the content of the output directory")
-    parser.add_argument('--overwrite_cache', action='store_true',
-                        help="Overwrite the cached training and evaluation sets")
-    parser.add_argument('--seed', type=int, default=42,
-                        help="random seed for initialization")
+    parser.add_argument('--save_total_limit', type=int, default=None, help='Limit the total amount of checkpoints, delete the older checkpoints in the output_dir, does not delete by default')
+    parser.add_argument("--eval_all_checkpoints", action='store_true', help="Evaluate all checkpoints starting with the same prefix as model_name_or_path ending and ending with step number")
+    parser.add_argument("--no_cuda", action='store_true', help="Avoid using CUDA when available")
+    parser.add_argument('--overwrite_output_dir', action='store_true', help="Overwrite the content of the output directory")
+    parser.add_argument('--overwrite_cache', action='store_true', help="Overwrite the cached training and evaluation sets")
+    parser.add_argument('--seed', type=int, default=42, help="random seed for initialization")
 
-    parser.add_argument('--fp16', action='store_true',
-                        help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit")
+    parser.add_argument('--fp16', action='store_true', help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit")
     parser.add_argument('--fp16_opt_level', type=str, default='O1',
                         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
                              "See details at https://nvidia.github.io/apex/amp.html")
-    parser.add_argument("--local_rank", type=int, default=-1,
-                        help="For distributed training: local_rank")
+    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument('--server_ip', type=str, default='', help="For distant debugging.")
     parser.add_argument('--server_port', type=str, default='', help="For distant debugging.")
 
@@ -391,12 +424,14 @@ def main():
     # 设置随机种子
     set_seed(args)
 
-    # 判断是否有checkpoint，从而继续预训练
+    # -----------判断是否有checkpoint，从而继续预训练
     args.start_epoch = 0
     args.start_step = 0
     checkpoint_last = os.path.join(args.output_dir, 'checkpoint-last')
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
+        # 模型地址
         args.model_name_or_path = os.path.join(checkpoint_last, 'pytorch_model.bin')
+        # 配置地址
         args.config_name = os.path.join(checkpoint_last, 'config.json')
         step_file = os.path.join(checkpoint_last, 'step_file.txt')
         if os.path.exists(step_file):
@@ -409,7 +444,7 @@ def main():
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
 
 
-    base_path="../data"
+    base_path="data"
     text_features=[      
                     [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
                     [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
@@ -421,13 +456,13 @@ def main():
                     [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
                     ]
 
-    #读取训练数据
+    # 读取训练数据
     train_df = pd.read_pickle(os.path.join(base_path,'train_user.pkl'))
     test_df = pd.read_pickle(os.path.join(base_path,'test_user.pkl'))
     dev_data = train_df.iloc[-10000:]
     train_data = train_df.iloc[:-10000].append(test_df)
     
-    #创建输入端的词表，每个域最多保留10w个id
+    # 创建输入端的词表，每个域最多保留10w个id
     try:
         dic = pickle.load(open(os.path.join(args.output_dir, 'vocab.pkl'),'rb'))
     except:
@@ -435,33 +470,56 @@ def main():
         dic['pad']=0
         dic['mask']=1
         dic['unk']=2    
-        for feature in text_features: 
+        for feature in text_features[0:-1]:
+            # 将每个id序列提取出来，计算 （sequence_text_user_id_product_id，xxx）的次数
             conter=Counter()
             for item in train_df[feature[1]].values:
-                for word in item.split():
-                    try:
-                        conter[(feature[1],word)]+=1
-                    except:
-                        conter[(feature[1],word)]=1 
+                print(item)
+                try:
+                    for word in item.split():
+                        try:
+                            conter[(feature[1], word)] += 1
+                        except:
+                            conter[(feature[1], word)] = 1
+                except:
+                    pass
+            # 每个id下数量最多的100000个
             most_common=conter.most_common(100000)   
             cont=0
+
             for x in most_common:
+                # x: (('sequence_text_user_id_product_id', '28663'), 10)
+                # print(x)
+
+                # 对于出现大于5次的，进行index编码
                 if x[1]>5:
                     dic[x[0]]=len(dic)
                     cont+=1
                     if cont<10:
+                        print(x)
                         print(x[0],dic[x[0]])
             print(cont)
-     
-    #读取或重新创建BERT   
+    # dict:
+    # {'pad': 0,
+    #  'mask': 1,
+    #  'unk': 2,
+    #  ('sequence_text_user_id_product_id', '-1'): 3,
+    #  ('sequence_text_user_id_product_id', '1261'): 4,
+    #  ('sequence_text_user_id_product_id', '129'): 5,
+    #  ('sequence_text_user_id_product_id', '26858'): 6,
+
+
+    #-------------读取或重新创建BERT ----------------
     if args.model_name_or_path is not None:
+        # 预训练模型配置文件：
+        #       如果有的config.json话加载，没有的话，
         config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
                                               cache_dir=args.cache_dir if args.cache_dir else None)        
         model = model_class.from_pretrained(args.model_name_or_path,
                                             from_tf=bool('.ckpt' in args.model_name_or_path),
                                             config=config,
                                             cache_dir=args.cache_dir if args.cache_dir else None)   
-        args.text_dim=config.hidden_size
+        args.text_dim = config.hidden_size
 
     else:
         config = RobertaConfig()        
@@ -476,45 +534,57 @@ def main():
         logger.info("%s",config)   
     logger.info("Training/evaluation parameters %s", args)
 
-    #保存输入端词表
+
+    #------------保存输入端词表
     args.vocab_dic = dic
     pickle.dump(dic, open(os.path.join(args.output_dir, 'vocab.pkl'),'wb'))
 
 
-    #读取word embedding
+    #------------读取word embedding
     import gensim
     embedding_table = []
     for x in text_features:
         print(x)
-        embedding_table.append(pickle.load(open(x[0],'rb')))
+        embedding_table.append(pickle.load(open(x[0], 'rb')))
+    # embedding_table[0].wv['3465']
+    # print(embedding_table[0].wv.vocab.keys())
+
 
     # 创建输出端词表，每个域最多保留10w个id
-    vocab=[]
-    for feature in text_features:
+    vocab = []
+    for feature in text_features[0:1]:
+        print(feature[1])
         conter=Counter()
         for item in train_data[feature[1]].values:
-            for word in item.split():
-                try:
-                    conter[word]+=1
-                except:
-                    conter[word]=1
-        most_common=conter.most_common(100000)
-        dic={}
-        for idx,x in enumerate(most_common):
-            dic[x[0]]=idx+1    
+            try:
+                for word in item.split():
+                    try:
+                        conter[word] += 1
+                    except:
+                        conter[word] = 1
+            except:
+                pass
+        most_common = conter.most_common(100000)
+        dic = {}
+        for idx, x in enumerate(most_common):
+            dic[x[0]] = idx+1
         vocab.append(dic)
-     
+
+
     # 设置参数
     args.vocab_size_v1 = config.vocab_size_v1
     args.vocab_dim_v1 = config.vocab_dim_v1
     args.vocab = vocab
+    # 8*128(id向量)
     args.text_dim = sum([x[2] for x in text_features])
     args.text_features = text_features
-    train_dataset = TextDataset(args,train_data,embedding_table)
-    dev_dataset = TextDataset(args,dev_data,embedding_table)
+
+    train_dataset = TextDataset(args, train_data, embedding_table)
+    dev_dataset = TextDataset(args, dev_data,embedding_table)
+
     args.vocab_size = [len(x)+1 for x in vocab]
     # 创建模型
-    model = Model(model,config,args)
+    model = Model(model, config, args)
     # 如果有checkpoint，读取checkpoint
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
         logger.info("Load model from %s", os.path.join(checkpoint_last, "model.bin"))

@@ -9,13 +9,13 @@ from torch.nn import CrossEntropyLoss, MSELoss
 
         
 class Model(nn.Module):   
-    def __init__(self, encoder,config,args):
+    def __init__(self, encoder, config, args):
         super(Model, self).__init__()
         self.encoder = encoder
-        self.lm_head=[]
+        self.lm_head = []
 
-        # embdding并初始化
-        self.text_embeddings = nn.Embedding(args.vocab_size_v1,args.vocab_dim_v1)
+        # embdding并初始化 [vocab_size_v1,vocab_dim_v1]
+        self.text_embeddings = nn.Embedding(args.vocab_size_v1, args.vocab_dim_v1)
         self.text_embeddings.apply(self._init_weights)
 
         # NN 并初始化
@@ -25,9 +25,9 @@ class Model(nn.Module):
         #
         for x in args.vocab_size:
             self.lm_head.append(nn.Linear(config.hidden_size, x, bias=False))
-        self.lm_head=nn.ModuleList(self.lm_head)
-        self.config=config
-        self.args=args
+        self.lm_head = nn.ModuleList(self.lm_head)
+        self.config = config
+        self.args = args
 
 
     def _init_weights(self, module):

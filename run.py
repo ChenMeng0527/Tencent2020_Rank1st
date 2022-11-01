@@ -18,7 +18,7 @@ base_path="data"
 
 
 
-# ------定义浮点数特征
+# ------1:定义浮点数特征------
 # 统计特征
 dense_features=['user_id__size',
 
@@ -32,40 +32,118 @@ dense_features=['user_id__size',
                 'user_id_click_times_sum',
                 'user_id_click_times_mean',
                 'user_id_click_times_std']
-# kfold特征
+
+
+# ------2:kfold特征------
 for l in ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]:
-    for f in ['creative_id','ad_id','product_id','advertiser_id','industry']:  
+    for f in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
         dense_features.append(l+'_'+f+'_mean')
 
+# ['user_id__size',
+#  'user_id_ad_id_unique',
+#  'user_id_creative_id_unique',
+#  'user_id_advertiser_id_unique',
+#  'user_id_industry_unique',
+#  'user_id_product_id_unique',
+#  'user_id_time_unique',
+#  'user_id_click_times_sum',
+#  'user_id_click_times_mean',
+#  'user_id_click_times_std',
 
-# 定义用户点击的序列特征
+#  'age_0_creative_id_mean',
+#  'age_0_ad_id_mean',
+#  'age_0_product_id_mean',
+#  'age_0_advertiser_id_mean',
+#  'age_0_industry_mean',
+#  'age_1_creative_id_mean',
+#  'age_1_ad_id_mean',
+#  'age_1_product_id_mean',
+#  'age_1_advertiser_id_mean',
+#  'age_1_industry_mean',
+#  'age_2_creative_id_mean',
+#  'age_2_ad_id_mean',
+#  'age_2_product_id_mean',
+#  'age_2_advertiser_id_mean',
+#  'age_2_industry_mean',
+#  'age_3_creative_id_mean',
+#  'age_3_ad_id_mean',
+#  'age_3_product_id_mean',
+#  'age_3_advertiser_id_mean',
+#  'age_3_industry_mean',
+#  'age_4_creative_id_mean',
+#  'age_4_ad_id_mean',
+#  'age_4_product_id_mean',
+#  'age_4_advertiser_id_mean',
+#  'age_4_industry_mean',
+#  'age_5_creative_id_mean',
+#  'age_5_ad_id_mean',
+#  'age_5_product_id_mean',
+#  'age_5_advertiser_id_mean',
+#  'age_5_industry_mean',
+#  'age_6_creative_id_mean',
+#  'age_6_ad_id_mean',
+#  'age_6_product_id_mean',
+#  'age_6_advertiser_id_mean',
+#  'age_6_industry_mean',
+#  'age_7_creative_id_mean',
+#  'age_7_ad_id_mean',
+#  'age_7_product_id_mean',
+#  'age_7_advertiser_id_mean',
+#  'age_7_industry_mean',
+#  'age_8_creative_id_mean',
+#  'age_8_ad_id_mean',
+#  'age_8_product_id_mean',
+#  'age_8_advertiser_id_mean',
+#  'age_8_industry_mean',
+#  'age_9_creative_id_mean',
+#  'age_9_ad_id_mean',
+#  'age_9_product_id_mean',
+#  'age_9_advertiser_id_mean',
+#  'age_9_industry_mean',
+#  'gender_0_creative_id_mean',
+#  'gender_0_ad_id_mean',
+#  'gender_0_product_id_mean',
+#  'gender_0_advertiser_id_mean',
+#  'gender_0_industry_mean',
+#  'gender_1_creative_id_mean',
+#  'gender_1_ad_id_mean',
+#  'gender_1_product_id_mean',
+#  'gender_1_advertiser_id_mean',
+#  'gender_1_industry_mean']
+
+
+
+# ------3:定义用户点击的序列特征------
 text_features = [
-                [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128],
-                [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128],
-                [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128],
-                [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128],
-                [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128],
-                [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128],
-                [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128],
-                [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128],
+                [base_path+"/sequence_text_user_id_product_id.128d", 'sequence_text_user_id_product_id', 128],
+                [base_path+"/sequence_text_user_id_ad_id.128d", 'sequence_text_user_id_ad_id', 128],
+                [base_path+"/sequence_text_user_id_creative_id.128d", 'sequence_text_user_id_creative_id', 128],
+                [base_path+"/sequence_text_user_id_advertiser_id.128d", 'sequence_text_user_id_advertiser_id', 128],
+                [base_path+"/sequence_text_user_id_industry.128d", 'sequence_text_user_id_industry', 128],
+                [base_path+"/sequence_text_user_id_product_category.128d", 'sequence_text_user_id_product_category', 128],
+                [base_path+"/sequence_text_user_id_time.128d", 'sequence_text_user_id_time', 128],
+                [base_path+"/sequence_text_user_id_click_times.128d", 'sequence_text_user_id_click_times', 128],
                 ]
-#定义用户点击的人工构造序列特征
+
+# ------4:定义用户点击的人工构造序列特征------
 text_features_1 = [
-                    [base_path+"/sequence_text_user_id_creative_id_fold.12d",'sequence_text_user_id_creative_id_fold',12],
-                    [base_path+"/sequence_text_user_id_ad_id_fold.12d",'sequence_text_user_id_ad_id_fold',12],
-                    [base_path+"/sequence_text_user_id_product_id_fold.12d",'sequence_text_user_id_product_id_fold',12],
-                    [base_path+"/sequence_text_user_id_advertiser_id_fold.12d",'sequence_text_user_id_advertiser_id_fold',12],
-                    [base_path+"/sequence_text_user_id_industry_fold.12d",'sequence_text_user_id_industry_fold',12],
+                    [base_path+"/sequence_text_user_id_creative_id_fold.12d", 'sequence_text_user_id_creative_id_fold', 12],
+                    [base_path+"/sequence_text_user_id_ad_id_fold.12d", 'sequence_text_user_id_ad_id_fold', 12],
+                    [base_path+"/sequence_text_user_id_product_id_fold.12d", 'sequence_text_user_id_product_id_fold', 12],
+                    [base_path+"/sequence_text_user_id_advertiser_id_fold.12d", 'sequence_text_user_id_advertiser_id_fold', 12],
+                    [base_path+"/sequence_text_user_id_industry_fold.12d", 'sequence_text_user_id_industry_fold', 12],
                     ]
 
 
 if __name__ == "__main__":
 
+    # logging
     logger = logging.getLogger(__name__)
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO)
 
+    # 参数
     parser = argparse.ArgumentParser()
     parser.add_argument('--kfold', type=int, default=5)
     parser.add_argument('--index', type=int, default=0)

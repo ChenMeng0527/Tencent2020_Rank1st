@@ -114,6 +114,7 @@ def kfold(train_df, test_df, log_data, pivot):
     log_data: 用户行为数据
     pivot: id字段
     '''
+    # log_data = log
     # 先对log做kflod统计, 统计每条记录中pivot特征的性别年龄分布
     kfold_features = ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i in range(2)]
     # 将不同年龄，性别的用户数据包括 'pivot'，'fold'字段数据拿出来
@@ -129,12 +130,21 @@ def kfold(train_df, test_df, log_data, pivot):
         tmp['fold'] = fold
         tmps.append(tmp)
     tmp = pd.concat(tmps, axis=0).reset_index()
+
+    # Index(['user_id', 'creative_id', 'fold', 'index', 'age_0', 'age_1', 'age_2',
+    #        'age_3', 'age_4', 'age_5', 'age_6', 'age_7', 'age_8', 'age_9',
+    #        'gender_0', 'gender_1'],
+    #       dtype='object')
     tmp = log[['user_id', pivot, 'fold']].merge(tmp, on=[pivot, 'fold'], how='left')
+
     del log
     del tmps
     gc.collect()
 
-    # 获得用户点击的所有记录的平均性别年龄分布 ？？？？？？？
+
+    # 获得用户点击的所有记录的平均性别年龄分布
+    # ！！！注意点：根据log,将用户进行交叉target,这时候，每个用户是N条数据，比如'篮球'在年龄'10-20'为0.8,'口红'为0.2
+    # 用户可能即点'篮球'又点'口红'再求平均，则这个用户年龄'10-20'此特征为0.5;
     tmp_mean = pd.DataFrame(tmp.groupby('user_id')[kfold_features].mean()).reset_index()
     tmp_mean.columns = ['user_id'] + [f+'_'+pivot+'_mean' for f in kfold_features]
     for df in [train_df, test_df]:
@@ -167,14 +177,27 @@ def kfold_sequence(train_df, test_df, log_data, pivot):
     tmp = pd.concat(tmps, axis=0).reset_index()
     tmp = log[[pivot, 'fold', 'user_id']].merge(tmp, on=[pivot, 'fold'], how='left')
     tmp = tmp.fillna(-1)
+    # tmp.columns:
+    # 'industry', 'fold', 'user_id', 'index', 'age_0', 'age_1', 'age_2',
+    #        'age_3', 'age_4', 'age_5', 'age_6', 'age_7', 'age_8', 'age_9',
+    #        'gender_0', 'gender_1'],
+
+
+
+    # ！！！不同点：
+    # 将id与fold进行拼接
     tmp[pivot+'_fold'] = tmp[pivot]*10+tmp['fold']
     del log
     del tmps
-    gc.collect() 
+    gc.collect()
+
     # 获得用户点击记录的年龄性别分布序列
     tmp[pivot+'_fold'] = tmp[pivot+'_fold'].astype(int)
+    # 将用户对不同的id 点击生成序列，只不过这个序列id加上fold;
     kfold_sequence_features = sequence_text([train_df, test_df], 'user_id', pivot+'_fold', tmp)
+    # ！！！重点：同一个id+fold一个就行，因为都是一样的（数据量减少非常多）
     tmp = tmp.drop_duplicates([pivot+'_fold']).reset_index(drop=True)
+
 
     # 对每条记录年龄性别分布进行标准化
     kfold_features = ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]
@@ -198,10 +221,25 @@ def kfold_sequence(train_df, test_df, log_data, pivot):
 
 if __name__ == "__main__":
     # 读取数据
-    click_log = pd.read_pickle('data/click.pkl')
-    train_df = pd.read_pickle('data/train_user.pkl')
-    test_df = pd.read_pickle('data/test_user.pkl')
+    click_log = pd.read_pickle('data/click.pkl').sample(frac=0.1)
+    train_df = pd.read_pickle('data/train_user.pkl').sample(frac=1)
+    test_df = pd.read_pickle('data/test_user.pkl').sample(frac=1)
+
+    # click_log = pd.read_pickle('data/click.pkl')
+    # train_df = pd.read_pickle('data/train_user.pkl')
+    # test_df = pd.read_pickle('data/test_user.pkl')
+
+    # (63668283, 23) (900000, 3) (1000000, 3)
     print(click_log.shape, train_df.shape, test_df.shape)
+
+    # Index(['time', 'user_id', 'creative_id', 'click_times', 'ad_id', 'product_id',
+    #        'product_category', 'advertiser_id', 'industry', 'age', 'gender',
+    #        'age_0', 'age_1', 'age_2', 'age_3', 'age_4', 'age_5', 'age_6', 'age_7',
+    #        'age_8', 'age_9', 'gender_0', 'gender_1'],
+    #       dtype='object')
+    print(click_log.columns)
+
+
 
 
     ################################################################################
@@ -231,10 +269,25 @@ if __name__ == "__main__":
     # 10：每个用户click_times方差
     agg_features += get_agg_features([train_df, test_df], 'user_id', 'click_times', 'std', click_log)
 
+    # train_df:
+    #         user_id  age  ...  user_id_click_times_mean  user_id_click_times_std
+    # 0             1    3  ...                  1.076923                 0.277350
+    # 1             2    9  ...                  1.022222                 0.149071
+    # 2             3    6  ...                  1.000000                 0.000000
     train_df[agg_features] = train_df[agg_features].fillna(-1)
     test_df[agg_features] = test_df[agg_features].fillna(-1)
     print("Extracting aggregate feature done!")
     print("List aggregate feature names:")
+    # ['user_id__size',
+    # 'user_id_ad_id_unique',
+    # 'user_id_creative_id_unique',
+    # 'user_id_advertiser_id_unique',
+    # 'user_id_industry_unique',
+    # 'user_id_product_id_unique',
+    # 'user_id_time_unique',
+    # 'user_id_click_times_sum',
+    # 'user_id_click_times_mean',
+    # 'user_id_click_times_std']
     print(agg_features)
 
 
@@ -261,6 +314,8 @@ if __name__ == "__main__":
     print("Extracting sequence feature done!")
     print("List sequence feature names:")   
     print(text_features)
+
+
 
 
     ################################################################################
@@ -292,7 +347,8 @@ if __name__ == "__main__":
     #-------------4:获取K折序列特征,求出用户点击的每一条记录的年龄性别分布
     # 赋值index,训练集为0-4，测试集为5
     print("Extracting Kflod sequence feature...")
-    click_log = pd.read_pickle('data/click.pkl')
+    click_log = pd.read_pickle('data/click.pkl').sample(frac=0.1)
+    # click_log = pd.read_pickle('data/click.pkl')
     log = click_log.reset_index(drop=True)
     del click_log
     gc.collect()
@@ -302,6 +358,7 @@ if __name__ == "__main__":
     test_df['fold'] = 5
     df = train_df.append(test_df)[['user_id', 'fold']].reset_index(drop=True)
     log = log.merge(df, on='user_id', how='left')
+
 
     # 获取用户点击某特征的年龄性别分布序列
     kfold_sequence_features = []
@@ -318,3 +375,53 @@ if __name__ == "__main__":
     print("Extract features done! saving data...")
     train_df.to_pickle('data/train_user.pkl')
     test_df.to_pickle('data/test_user.pkl')
+    # train_df:
+    # ['user_id', 'age', 'gender',
+    #
+    #        'user_id__size', 'user_id_ad_id_unique',
+    #        'user_id_creative_id_unique', 'user_id_advertiser_id_unique',
+    #        'user_id_industry_unique', 'user_id_product_id_unique',
+    #        'user_id_time_unique', 'user_id_click_times_sum',
+    #        'user_id_click_times_mean', 'user_id_click_times_std',
+
+    #        'sequence_text_user_id_ad_id', 'sequence_text_user_id_creative_id',
+    #        'sequence_text_user_id_advertiser_id',
+    #        'sequence_text_user_id_product_id', 'sequence_text_user_id_industry',
+    #        'sequence_text_user_id_product_category', 'sequence_text_user_id_time',
+    #        'sequence_text_user_id_click_times',
+    #
+    #        'fold',
+    #
+    #        'age_0_creative_id_mean',
+    #        'age_1_creative_id_mean', 'age_2_creative_id_mean',
+    #        'age_3_creative_id_mean', 'age_4_creative_id_mean',
+    #        'age_5_creative_id_mean', 'age_6_creative_id_mean',
+    #        'age_7_creative_id_mean', 'age_8_creative_id_mean',
+    #        'age_9_creative_id_mean', 'gender_0_creative_id_mean',
+    #        'gender_1_creative_id_mean', 'age_0_ad_id_mean', 'age_1_ad_id_mean',
+    #        'age_2_ad_id_mean', 'age_3_ad_id_mean', 'age_4_ad_id_mean',
+    #        'age_5_ad_id_mean', 'age_6_ad_id_mean', 'age_7_ad_id_mean',
+    #        'age_8_ad_id_mean', 'age_9_ad_id_mean', 'gender_0_ad_id_mean',
+    #        'gender_1_ad_id_mean', 'age_0_product_id_mean', 'age_1_product_id_mean',
+    #        'age_2_product_id_mean', 'age_3_product_id_mean',
+    #        'age_4_product_id_mean', 'age_5_product_id_mean',
+    #        'age_6_product_id_mean', 'age_7_product_id_mean',
+    #        'age_8_product_id_mean', 'age_9_product_id_mean',
+    #        'gender_0_product_id_mean', 'gender_1_product_id_mean',
+    #        'age_0_advertiser_id_mean', 'age_1_advertiser_id_mean',
+    #        'age_2_advertiser_id_mean', 'age_3_advertiser_id_mean',
+    #        'age_4_advertiser_id_mean', 'age_5_advertiser_id_mean',
+    #        'age_6_advertiser_id_mean', 'age_7_advertiser_id_mean',
+    #        'age_8_advertiser_id_mean', 'age_9_advertiser_id_mean',
+    #        'gender_0_advertiser_id_mean', 'gender_1_advertiser_id_mean',
+    #        'age_0_industry_mean', 'age_1_industry_mean', 'age_2_industry_mean',
+    #        'age_3_industry_mean', 'age_4_industry_mean', 'age_5_industry_mean',
+    #        'age_6_industry_mean', 'age_7_industry_mean', 'age_8_industry_mean',
+    #        'age_9_industry_mean', 'gender_0_industry_mean',
+    #        'gender_1_industry_mean',
+    #
+    #        'sequence_text_user_id_creative_id_fold',
+    #        'sequence_text_user_id_ad_id_fold',
+    #        'sequence_text_user_id_product_id_fold',
+    #        'sequence_text_user_id_advertiser_id_fold',
+    #        'sequence_text_user_id_industry_fold']
