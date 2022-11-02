@@ -17,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
 
     
 class Model(nn.Module):
-    def __init__(self,args):
+    def __init__(self, args):
         super(Model, self).__init__()
         # 统计特征的个数
         args.out_size = len(args.dense_features)
@@ -25,23 +25,30 @@ class Model(nn.Module):
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.args = args
 
-        # 创建BERT模型，并且导入预训练模型
+        # ----------------1：创建BERT模型，并且导入预训练模型----------------
+        # 输入：
+        # 输出：
         config = RobertaConfig.from_pretrained(args.pretrained_model_path) 
         config.output_hidden_states = True
         args.hidden_size = config.hidden_size
         args.num_hidden_layers = config.num_hidden_layers
+
+        # robert层
         self.text_layer = RobertaModel.from_pretrained(args.pretrained_model_path, config=config)
+
         #
         self.text_linear = nn.Linear(args.text_dim + args.vocab_dim_v1*len(args.text_features), args.hidden_size)
         logger.info("Load linear from %s", os.path.join(args.pretrained_model_path, "linear.bin"))
-        #
-        self.text_linear.load_state_dict(torch.load(os.path.join(args.pretrained_model_path, "linear.bin")))           
-        logger.info("Load embeddings from %s",os.path.join(args.pretrained_model_path, "embeddings.bin"))
-        #
+        self.text_linear.load_state_dict(torch.load(os.path.join(args.pretrained_model_path, "linear.bin")))
+
+        logger.info("Load embeddings from %s", os.path.join(args.pretrained_model_path, "embeddings.bin"))
         self.text_embeddings = nn.Embedding.from_pretrained(torch.load(os.path.join(args.pretrained_model_path, "embeddings.bin"))['weight'], freeze=True)
-        args.out_size+=args.hidden_size*2
-        
-        # 创建fusion-layer模型，随机初始化
+        args.out_size += args.hidden_size*2
+
+
+        # ----------------2：创建fusion-layer模型，随机初始化----------------
+        # 输入：
+        # 输出：
         config = RobertaConfig()        
         config.num_hidden_layers = 4
         config.intermediate_size = 2048
@@ -52,10 +59,13 @@ class Model(nn.Module):
         self.text_layer_1.apply(self._init_weights)
         self.text_linear_1 = nn.Linear(args.text_dim_1+args.hidden_size, 512)
         self.text_linear_1.apply(self._init_weights)  
-        self.norm= nn.BatchNorm1d(args.text_dim_1+args.hidden_size)
+        self.norm = nn.BatchNorm1d(args.text_dim_1+args.hidden_size)
         args.out_size += 1024
 
-        # 创建分类器，随机初始化
+
+        # ----------------3：创建分类器，随机初始化----------------
+        # 输入：
+        # 输出：
         self.classifier = ClassificationHead(args)
         self.classifier.apply(self._init_weights)
         
@@ -141,19 +151,21 @@ class Model(nn.Module):
 class ClassificationHead(nn.Module):
     '''
     Head for sentence-level classification tasks.
+    最终合并后的NN层
     '''
 
     def __init__(self, args):
         super().__init__()
-        self.norm= nn.BatchNorm1d(args.out_size)
+        self.norm = nn.BatchNorm1d(args.out_size)
         self.dense = nn.Linear(args.out_size, args.linear_layer_size[0])
-        self.norm_1= nn.BatchNorm1d(args.linear_layer_size[0])
+        self.norm_1 = nn.BatchNorm1d(args.linear_layer_size[0])
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.dense_1 = nn.Linear(args.linear_layer_size[0], args.linear_layer_size[1])  
-        self.norm_2= nn.BatchNorm1d(args.linear_layer_size[1])
+        self.norm_2 = nn.BatchNorm1d(args.linear_layer_size[1])
         self.out_proj = nn.Linear(args.linear_layer_size[1], args.num_label)
 
     def forward(self, features, **kwargs):
+        # 输入为：args.out_size
         # bn--(dropout--liner--bn--relu)*2--dropout--liner
         x = self.norm(features)
         x = self.dropout(x)

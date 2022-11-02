@@ -13,13 +13,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from __future__ import absolute_import, division, print_function
+
 """
 Fine-tuning the library models for language modeling on a text file (GPT, GPT-2, BERT, RoBERTa).
 GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while BERT and RoBERTa are fine-tuned
 using a masked language modeling (MLM) loss.
 """
 
-from __future__ import absolute_import, division, print_function
+'''
+预训练bert模型
+'''
+
+import sys
+sys.path.append('/Users/youshu_/Python_Workspace/Tencent2020_Rank1st')
+
 from collections import Counter
 import argparse
 import glob
@@ -156,14 +165,14 @@ def train(args, train_dataset, dev_dataset, model):
     '''
 
     '''
-    #设置dataloader
+    # 设置dataloader
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4)
     t_total = args.max_steps
     args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
 
-    #设置优化器
+    # 设置优化器
     model.to(args.device)
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()     
@@ -174,9 +183,9 @@ def train(args, train_dataset, dev_dataset, model):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
-                                                num_training_steps=t_total)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total)
 
+    #
     checkpoint_last = os.path.join(args.output_dir, 'checkpoint-last')
     scheduler_last = os.path.join(checkpoint_last, 'scheduler.pt')
     optimizer_last = os.path.join(checkpoint_last, 'optimizer.pt')
@@ -185,7 +194,9 @@ def train(args, train_dataset, dev_dataset, model):
     if os.path.exists(optimizer_last):
         optimizer.load_state_dict(torch.load(optimizer_last, map_location="cpu"))    
     if args.local_rank == 0:
-        torch.distributed.barrier()         
+        torch.distributed.barrier()
+
+    #
     if args.fp16:
         try:
             from apex import amp
@@ -200,8 +211,7 @@ def train(args, train_dataset, dev_dataset, model):
  
     # 训练
     logger.info("***** Running training *****")
-    logger.info("  Num examples = %d", len(train_dataset)* (
-                    torch.distributed.get_world_size() if args.local_rank != -1 else 1))
+    logger.info("  Num examples = %d", len(train_dataset)* ( torch.distributed.get_world_size() if args.local_rank != -1 else 1))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
     logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
@@ -219,9 +229,9 @@ def train(args, train_dataset, dev_dataset, model):
 
     for idx in range(args.start_epoch, int(args.num_train_epochs)): 
         for step, batch in enumerate(train_dataloader):
-            inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]   
+            inputs, inputs_ids, masks, labels = [x.to(args.device) for x in batch]
             model.train()
-            loss = model(inputs,inputs_ids,masks,labels)
+            loss = model(inputs, inputs_ids, masks, labels)
 
             if args.n_gpu > 1:
                 loss = loss.mean()
@@ -238,8 +248,7 @@ def train(args, train_dataset, dev_dataset, model):
 
             tr_loss += loss.item()
             
-   
-            
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
@@ -313,6 +322,9 @@ def train(args, train_dataset, dev_dataset, model):
 
 
 def evaluate(args,  model, eval_dataset):
+    '''
+    评估
+    '''
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,num_workers=4)
@@ -321,18 +333,16 @@ def evaluate(args,  model, eval_dataset):
     nb_eval_steps = 0
     model.eval()      
     for batch in eval_dataloader:
-        inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]       
+        inputs, inputs_ids, masks, labels = [x.to(args.device) for x in batch]
         with torch.no_grad():
-            lm_loss = model(inputs,inputs_ids,masks,labels)
+            lm_loss = model(inputs, inputs_ids, masks, labels)
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
 
     eval_loss = eval_loss / nb_eval_steps
     perplexity = torch.exp(torch.tensor(eval_loss))
 
-    result = {
-        "perplexity": float(perplexity)
-    }
+    result = {"perplexity": float(perplexity)}
     
     return result
 
@@ -346,12 +356,10 @@ def main():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
-    parser.add_argument("--output_dir", default=None, type=str, required=True,
-                        help="The output directory where the model predictions and checkpoints will be written.")
+    parser.add_argument("--output_dir", default=None, type=str, required=True, help="The output directory where the model predictions and checkpoints will be written.")
 
     ## Other parameters
-    parser.add_argument("--eval_data_file", default=None, type=str,
-                        help="An optional input evaluation data file to evaluate the perplexity on (a text file).")
+    parser.add_argument("--eval_data_file", default=None, type=str, help="An optional input evaluation data file to evaluate the perplexity on (a text file).")
 
     parser.add_argument("--model_type", default="bert", type=str, help="The model architecture to be fine-tuned.")
     parser.add_argument("--model_name_or_path", default=None, type=str, help="The model checkpoint for weights initialization.")
@@ -413,7 +421,8 @@ def main():
     args.n_gpu = torch.cuda.device_count()
     args.device = device
 
-    # 设置log信息
+
+    # -----------------------设置log信息-----------------------
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
@@ -421,18 +430,21 @@ def main():
                    args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
 
 
-    # 设置随机种子
+    # -----------------------设置随机种子-----------------------
     set_seed(args)
 
-    # -----------判断是否有checkpoint，从而继续预训练
+
+    # -----------------------判断是否有checkpoint，从而继续预训练-----------------------
     args.start_epoch = 0
     args.start_step = 0
     checkpoint_last = os.path.join(args.output_dir, 'checkpoint-last')
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
+
         # 模型地址
         args.model_name_or_path = os.path.join(checkpoint_last, 'pytorch_model.bin')
         # 配置地址
         args.config_name = os.path.join(checkpoint_last, 'config.json')
+        # step_file
         step_file = os.path.join(checkpoint_last, 'step_file.txt')
         if os.path.exists(step_file):
             with open(step_file, encoding='utf-8') as stepf:
@@ -440,12 +452,11 @@ def main():
 
         logger.info("reload model from {}, resume from {} epoch".format(checkpoint_last, args.start_epoch))
 
-    
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
 
 
-    base_path="data"
-    text_features=[      
+
+    base_path = "data"
+    text_features = [
                     [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
                     [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
                     [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
@@ -456,23 +467,26 @@ def main():
                     [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
                     ]
 
-    # 读取训练数据
-    train_df = pd.read_pickle(os.path.join(base_path,'train_user.pkl'))
-    test_df = pd.read_pickle(os.path.join(base_path,'test_user.pkl'))
+
+    # -----------------------读取训练数据-----------------------
+    train_df = pd.read_pickle(os.path.join(base_path, 'train_user.pkl'))
+    test_df = pd.read_pickle(os.path.join(base_path, 'test_user.pkl'))
     dev_data = train_df.iloc[-10000:]
     train_data = train_df.iloc[:-10000].append(test_df)
-    
+
+
+    # -----------------------将所有id及pad/mask/unk进行编码-----------------
     # 创建输入端的词表，每个域最多保留10w个id
     try:
-        dic = pickle.load(open(os.path.join(args.output_dir, 'vocab.pkl'),'rb'))
+        dic = pickle.load(open(os.path.join(args.output_dir, 'vocab.pkl'), 'rb'))
     except:
         dic={}
-        dic['pad']=0
-        dic['mask']=1
-        dic['unk']=2    
+        dic['pad'] = 0
+        dic['mask'] = 1
+        dic['unk'] = 2
         for feature in text_features[0:-1]:
             # 将每个id序列提取出来，计算 （sequence_text_user_id_product_id，xxx）的次数
-            conter=Counter()
+            conter = Counter()
             for item in train_df[feature[1]].values:
                 print(item)
                 try:
@@ -484,20 +498,20 @@ def main():
                 except:
                     pass
             # 每个id下数量最多的100000个
-            most_common=conter.most_common(100000)   
-            cont=0
+            most_common = conter.most_common(100000)
+            cont = 0
 
             for x in most_common:
                 # x: (('sequence_text_user_id_product_id', '28663'), 10)
                 # print(x)
 
                 # 对于出现大于5次的，进行index编码
-                if x[1]>5:
-                    dic[x[0]]=len(dic)
-                    cont+=1
-                    if cont<10:
+                if x[1] > 5:
+                    dic[x[0]] = len(dic)
+                    cont += 1
+                    if cont < 10:
                         print(x)
-                        print(x[0],dic[x[0]])
+                        print(x[0], dic[x[0]])
             print(cont)
     # dict:
     # {'pad': 0,
@@ -509,29 +523,34 @@ def main():
     #  ('sequence_text_user_id_product_id', '26858'): 6,
 
 
-    #-------------读取或重新创建BERT ----------------
+
+    # -------------------读取或重新创建BERT -------------------
+    # bert模型三件套
+    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+
+    # 已经下载或者训练好模型
     if args.model_name_or_path is not None:
         # 预训练模型配置文件：
         #       如果有的config.json话加载，没有的话，
         config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
-                                              cache_dir=args.cache_dir if args.cache_dir else None)        
+                                              cache_dir=args.cache_dir if args.cache_dir else None)
         model = model_class.from_pretrained(args.model_name_or_path,
                                             from_tf=bool('.ckpt' in args.model_name_or_path),
                                             config=config,
                                             cache_dir=args.cache_dir if args.cache_dir else None)   
         args.text_dim = config.hidden_size
-
+    # 新模型
     else:
         config = RobertaConfig()        
-        config.num_hidden_layers=12
-        config.hidden_size=512
-        config.intermediate_size=config.hidden_size*4
-        config.num_attention_heads=16
-        config.vocab_size=5    
+        config.num_hidden_layers = 12
+        config.hidden_size = 512
+        config.intermediate_size = config.hidden_size*4
+        config.num_attention_heads = 16
+        config.vocab_size = 5
         model = model_class(config)
-        config.vocab_size_v1=len(dic)
-        config.vocab_dim_v1=64
-        logger.info("%s",config)   
+        config.vocab_size_v1 = len(dic)
+        config.vocab_dim_v1 = 64
+        logger.info("%s", config)
     logger.info("Training/evaluation parameters %s", args)
 
 
@@ -552,8 +571,7 @@ def main():
 
     # 创建输出端词表，每个域最多保留10w个id
     vocab = []
-    for feature in text_features[0:1]:
-        print(feature[1])
+    for feature in text_features[0:-1]:
         conter=Counter()
         for item in train_data[feature[1]].values:
             try:
@@ -582,7 +600,15 @@ def main():
     train_dataset = TextDataset(args, train_data, embedding_table)
     dev_dataset = TextDataset(args, dev_data,embedding_table)
 
+    # 所有id的尺寸[x,x,x,x,x,x,x,x]
     args.vocab_size = [len(x)+1 for x in vocab]
+
+
+
+
+
+
+
     # 创建模型
     model = Model(model, config, args)
     # 如果有checkpoint，读取checkpoint

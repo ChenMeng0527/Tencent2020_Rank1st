@@ -10,8 +10,8 @@ import random
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from src.data_loader import TextDataset
-from torch.utils.data import DataLoader, SequentialSampler, RandomSampler,TensorDataset
+from src.D_data_loader import TextDataset
+from torch.utils.data import DataLoader, SequentialSampler, RandomSampler, TensorDataset
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 from sklearn.model_selection import StratifiedKFold
 base_path="data"
@@ -137,16 +137,18 @@ text_features_1 = [
 
 if __name__ == "__main__":
 
-    # logging
+    # ----------------------logging----------------------
     logger = logging.getLogger(__name__)
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO)
 
-    # 参数
+
+    # ----------------------设置参数----------------------
+    # 1：变换参数
     parser = argparse.ArgumentParser()
     parser.add_argument('--kfold', type=int, default=5)
-    parser.add_argument('--index', type=int, default=0)
+    parser.add_argument('--index', type=int, default=0) # savemodel文件夹编号
     parser.add_argument('--train_batch_size', type=int, default=512)
     parser.add_argument('--max_len_text', type=int, default=128)
     parser.add_argument('--num_hidden_layers', type=int, default=6)
@@ -163,51 +165,59 @@ if __name__ == "__main__":
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--eval_batch_size', type=int, default=4096)
     parser.add_argument('--seed', type=int, default=2020)
-    parser.add_argument('--num_label', type=int, default=20)    
-   
+    parser.add_argument('--num_label', type=int, default=20)
     args = parser.parse_args()
     
-    # 设置参数
+    # 2：写死参数
+    # 8*128
     args.hidden_size = sum([x[-1] for x in text_features])
-    logger.info("Argument %s", args)    
+    logger.info("Argument %s", args)
+    # 预训练模型vocab
     args.vocab = pickle.load(open(os.path.join(args.pretrained_model_path, "vocab.pkl"),'rb'))
+    # vocab个数
     args.vocab_size_v1 = len(args.vocab)
+    # 128维度--行为4维度数组
     args.text_features = text_features
+    # 12维度--行为4维度数组
     args.text_features_1 = text_features_1
+    # 稠密特征列
     args.dense_features = dense_features
-    args.linear_layer_size = [1024,512]
+    args.linear_layer_size = [1024, 512]
+    # 8*128
     args.text_dim = sum([x[-1] for x in text_features])
+    # 4*12
     args.text_dim_1 = sum([x[-1] for x in text_features_1])
     args.output_dir = "saved_models/index_{}".format(args.index)
 
 
-    #-------------------读取word2vector模型-------------------
+    # 3：读取word2vector模型
     args.embeddings_tables={}
     for x in args.text_features:
         if x[0] not in args.embeddings_tables:
             try:
                 # gensim读取
                 args.embeddings_tables[x[0]] = gensim.models.KeyedVectors.load_word2vec_format(x[0], binary=False)
-                # pickle读取
             except:
-                args.embeddings_tables[x[0]] = pickle.load(open(x[0],'rb'))
+                # pickle读取
+                args.embeddings_tables[x[0]] = pickle.load(open(x[0], 'rb'))
 
     args.embeddings_tables_1={}
     for x in args.text_features_1:
         if x[0] not in args.embeddings_tables_1:
             try:
-                args.embeddings_tables_1[x[0]] = gensim.models.KeyedVectors.load_word2vec_format(x[0],binary=False)
+                args.embeddings_tables_1[x[0]] = gensim.models.KeyedVectors.load_word2vec_format(x[0], binary=False)
             except:
-                args.embeddings_tables_1[x[0]] = pickle.load(open(x[0],'rb'))
+                args.embeddings_tables_1[x[0]] = pickle.load(open(x[0], 'rb'))
 
 
-    #-------------------统计特征进行归一化-------------------
-    # label = age*2+gender
+
+    #-------------------label设置为20 + 稠密统计特征进行归一化-------------------
+    # label = age*2 + gender
     train_df = pd.read_pickle('data/train_user.pkl')
-    train_df['label'] = train_df['age']*2+train_df['gender']
+    train_df['label'] = train_df['age']*2 + train_df['gender']
     test_df = pd.read_pickle('data/test_user.pkl')
-    test_df['label'] = test_df['age']*2+test_df['gender']
-
+    test_df['label'] = test_df['age']*2 + test_df['gender']
+    # 特征进行归一化
     df = train_df[args.dense_features].append(test_df[args.dense_features])
     ss = StandardScaler()
     ss.fit(df[args.dense_features])
@@ -221,7 +231,7 @@ if __name__ == "__main__":
     skf = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
     model = ctrNet.ctrNet(args)
     #训练模型
-    for i,(train_index,test_index) in enumerate(skf.split(train_df,train_df['label'])):
+    for i,(train_index,test_index) in enumerate(skf.split(train_df, train_df['label'])):
         if i!=args.index:
             continue
         logger.info("Index: %s", args.index)
