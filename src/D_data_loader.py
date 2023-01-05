@@ -7,10 +7,8 @@ pytporch数据处理---注释
 
 import logging
 import torch
-import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
-import gensim
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -48,7 +46,7 @@ class TextDataset(Dataset):
         self.embeddings_tables = []
         for x in args.text_features:
             self.embeddings_tables.append(args.embeddings_tables[x[0]] if x[0] is not None else None)
-        self.embeddings_tables_1=[]
+        self.embeddings_tables_1 = []
         for x in args.text_features_1:
             self.embeddings_tables_1.append(args.embeddings_tables_1[x[0]] if x[0] is not None else None)            
 
@@ -75,7 +73,7 @@ class TextDataset(Dataset):
 
             # --------针对id行为：把text_features/text_masks/text_ids进行填补-----------
 
-            # text_features = [max_len_text,8*128]
+            # text_features = [max_len_text, 8*128]
             text_features = np.zeros((self.args.max_len_text, self.args.text_dim))
             # text_masks = [max_len_text]
             text_masks = np.zeros(self.args.max_len_text)
@@ -83,6 +81,7 @@ class TextDataset(Dataset):
             text_ids = np.zeros((self.args.max_len_text, len(self.args.text_features)), dtype=np.int64)
 
             begin_dim = 0
+
             for idx, (embed_table, x) in enumerate(zip(self.embeddings_tables, self.text_features[i])):
                 # 128/128的往后加
                 end_dim = begin_dim + self.args.text_features[idx][-1]
@@ -114,6 +113,7 @@ class TextDataset(Dataset):
             text_masks_1 = np.zeros(self.args.max_len_text)
 
             begin_dim = 0
+            # 遍历每个embedding ,及对应的行为序列
             for idx, (embed_table, x) in enumerate(zip(self.embeddings_tables_1, self.text_features_1[i])):
                 end_dim = begin_dim + self.args.text_features_1[idx][-1]
 
@@ -124,8 +124,9 @@ class TextDataset(Dataset):
                         text_masks_1[w_idx] = 1
 
                 # 如果没有预训练的embedding
-                # ？？？？？v到底是个什么东西？？？
+                # embedding中放入的为行为的id
                 else:
+                    # 行为序列
                     for w_idx, v in enumerate(x[:self.args.max_len_text]):
                         text_features_1[w_idx, begin_dim:end_dim] = v
                         text_masks_1[w_idx] = 1
@@ -133,20 +134,28 @@ class TextDataset(Dataset):
 
 
         # 浮点数特征
-        if len(self.args.dense_features)==0:
+        if len(self.args.dense_features) == 0:
             dense_features = 0
         else:
             dense_features = self.dense_features[i]
 
         return (
+                # 20分类的label
                 torch.tensor(label),
+
+                # 10个统计特征+target统计特征
                 torch.tensor(dense_features),
 
+                # 8个行为序列用embedding进行填满[max_len_text, 8*128]
                 torch.tensor(text_features),
+                # 8个行为序列用vocab进行填满[max_len_text,8]
                 torch.tensor(text_ids),
+                # 8个行为序列用mask进行填满[max_len_text]
                 torch.tensor(text_masks),
 
+                # 4个合并id序列[max_len_text,4*12]
                 torch.tensor(text_features_1),
+                # [max_len_text]
                 torch.tensor(text_masks_1),            
                )
 

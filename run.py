@@ -169,24 +169,32 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # 2：写死参数
-    # 8*128
+    # 8个行为序列总维度：8*128
     args.hidden_size = sum([x[-1] for x in text_features])
     logger.info("Argument %s", args)
+
     # 预训练模型vocab
-    args.vocab = pickle.load(open(os.path.join(args.pretrained_model_path, "vocab.pkl"),'rb'))
+    args.vocab = pickle.load(open(os.path.join(args.pretrained_model_path, "vocab.pkl"), 'rb'))
+
     # vocab个数
     args.vocab_size_v1 = len(args.vocab)
+
     # 128维度--行为4维度数组
     args.text_features = text_features
-    # 12维度--行为4维度数组
-    args.text_features_1 = text_features_1
-    # 稠密特征列
-    args.dense_features = dense_features
-    args.linear_layer_size = [1024, 512]
     # 8*128
     args.text_dim = sum([x[-1] for x in text_features])
+
+    # 12维度--行为4维度数组
+    args.text_features_1 = text_features_1
     # 4*12
     args.text_dim_1 = sum([x[-1] for x in text_features_1])
+
+    # 稠密特征列
+    args.dense_features = dense_features
+
+    args.linear_layer_size = [1024, 512]
+
+
     args.output_dir = "saved_models/index_{}".format(args.index)
 
 
@@ -211,18 +219,20 @@ if __name__ == "__main__":
 
 
 
-    #-------------------label设置为20 + 稠密统计特征进行归一化-------------------
+    #-------------------label设置为age*2 + gender，20个   + 稠密统计特征进行归一化-------------------
     # label = age*2 + gender
     train_df = pd.read_pickle('data/train_user.pkl')
     train_df['label'] = train_df['age']*2 + train_df['gender']
     test_df = pd.read_pickle('data/test_user.pkl')
     test_df['label'] = test_df['age']*2 + test_df['gender']
+
     # 特征进行归一化
     df = train_df[args.dense_features].append(test_df[args.dense_features])
     ss = StandardScaler()
     ss.fit(df[args.dense_features])
     train_df[args.dense_features] = ss.transform(train_df[args.dense_features])
     test_df[args.dense_features] = ss.transform(test_df[args.dense_features])
+
     test_dataset = TextDataset(args, test_df)
 
 
@@ -230,9 +240,10 @@ if __name__ == "__main__":
     #-------------------建立模型------------
     skf = StratifiedKFold(n_splits=5, random_state=2020, shuffle=True)
     model = ctrNet.ctrNet(args)
-    #训练模型
-    for i,(train_index,test_index) in enumerate(skf.split(train_df, train_df['label'])):
-        if i!=args.index:
+    # 训练模型
+    # 将训练集分为训练/验证
+    for i, (train_index, test_index) in enumerate(skf.split(train_df, train_df['label'])):
+        if i != args.index:
             continue
         logger.info("Index: %s", args.index)
         train_dataset = TextDataset(args, train_df.iloc[train_index])
@@ -240,17 +251,18 @@ if __name__ == "__main__":
         model.train(train_dataset, dev_dataset)
         dev_df = train_df.iloc[test_index]
     
-    #输出结果
+    # 输出结果
     accs=[]
     for f,num in [('age',10),('gender',2)]:
+        # 加载模型
         model.reload(f)
         if f=="age":
-            dev_preds=model.infer(dev_dataset)[0]
+            dev_preds = model.infer(dev_dataset)[0]
         else:
-            dev_preds=model.infer(dev_dataset)[1]
+            dev_preds = model.infer(dev_dataset)[1]
         for j in range(num):
-            dev_df['{}_{}'.format(f,j)]=np.round(dev_preds[:,j],4)
-        acc=model.eval(dev_df[f].values,dev_preds)['eval_acc']
+            dev_df['{}_{}'.format(f,j)] = np.round(dev_preds[:,j],4)
+        acc = model.eval(dev_df[f].values, dev_preds)['eval_acc']
         accs.append(acc)
         if f=="age":
             test_preds=model.infer(test_dataset)[0]
